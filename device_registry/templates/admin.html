@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeDevice // ROOT_CONTROL_PANEL</title>
+    
+    <!-- Bootstrap 5 & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Cyber Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --matrix-green: #00ff66;
+            --cyber-cyan: #00e5ff;
+            --cyber-red: #ff0055;
+            --cyber-amber: #ffaa00;
+            --dark-bg: #0a0e14;
+            --panel-bg: rgba(13, 20, 30, 0.88);
+            --panel-border: rgba(0, 255, 102, 0.3);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--dark-bg);
+            color: #d8e2dc;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+        }
+
+        #matrixCanvas {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            opacity: 0.28;
+            pointer-events: none;
+        }
+
+        body::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .cyber-font {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1.5px;
+        }
+
+        .navbar-cyber {
+            background: rgba(10, 14, 20, 0.95);
+            border-bottom: 1px solid var(--cyber-amber);
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .cyber-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+        }
+
+        .cyber-stat-card {
+            background: rgba(13, 20, 30, 0.9);
+            border-radius: 8px;
+            border-left: 4px solid var(--matrix-green);
+        }
+
+        .cyber-input {
+            background-color: rgba(5, 8, 15, 0.85) !important;
+            border: 1px solid var(--cyber-cyan) !important;
+            color: var(--matrix-green) !important;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .table-cyber {
+            color: #cbd5e1;
+            border-color: rgba(0, 255, 102, 0.15);
+        }
+
+        .table-cyber th {
+            background-color: rgba(0, 255, 102, 0.08);
+            color: var(--matrix-green);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--matrix-green);
+        }
+
+        .table-cyber td {
+            background-color: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .btn-cyber-primary {
+            background: transparent;
+            color: var(--matrix-green);
+            border: 1px solid var(--matrix-green);
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .btn-cyber-primary:hover {
+            background: var(--matrix-green);
+            color: #000;
+        }
+    </style>
+</head>
+<body class="pb-5">
+
+<canvas id="matrixCanvas"></canvas>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-cyber mb-4">
+    <div class="container">
+        <span class="navbar-brand cyber-font text-warning fw-bold">
+            <i class="bi bi-cpu-fill me-1"></i> ROOT://CONTROL_PANEL
+        </span>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#adminCredsModal">
+                <i class="bi bi-key-fill"></i> UPDATE_ROOT_PASS
+            </button>
+            <a href="/" class="btn btn-outline-info btn-sm">PUBLIC_VIEW</a>
+            <a href="/admin/logout" class="btn btn-danger btn-sm">EXIT_ROOT</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-dark border border-{{ category }} text-{{ category }} alert-dismissible fade show cyber-card mb-4" role="alert">
+                    <i class="bi bi-terminal-fill me-2"></i> {{ message }}
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- METRICS -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card cyber-card cyber-stat-card p-3" style="border-left-color: var(--cyber-cyan);">
+                <span class="text-info small fw-bold">TOTAL_OPERATORS</span>
+                <h2 class="fw-bold cyber-font text-white mb-0">{{ users|length }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card cyber-card cyber-stat-card p-3" style="border-left-color: var(--matrix-green);">
+                <span class="text-success small fw-bold">HARDWARE_ENROLLED</span>
+                <h2 class="fw-bold cyber-font text-white mb-0">{{ devices|length }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card cyber-card cyber-stat-card p-3" style="border-left-color: var(--cyber-red);">
+                <span class="text-danger small fw-bold">FLAGGED_STOLEN</span>
+                <h2 class="fw-bold cyber-font text-white mb-0">{{ stolen_count }}</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card cyber-card cyber-stat-card p-3" style="border-left-color: var(--cyber-amber);">
+                <span class="text-warning small fw-bold">AUTHORIZED_FOR_SALE</span>
+                <h2 class="fw-bold cyber-font text-white mb-0">{{ sale_count }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLE 1: REGISTERED OPERATORS -->
+    <div class="card cyber-card mb-4">
+        <div class="card-header bg-transparent py-3 border-secondary d-flex justify-content-between">
+            <span class="cyber-font text-white fw-bold"><i class="bi bi-people-fill me-2 text-info"></i>REGISTERED_OPERATORS</span>
+            <span class="badge border border-info text-info">{{ users|length }} ENTRIES</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-cyber align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>UID</th>
+                            <th>ALIAS</th>
+                            <th>EMAIL</th>
+                            <th>EMERGENCY_PHONE</th>
+                            <th>STATUS</th>
+                            <th>NODES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in users %}
+                        <tr>
+                            <td>#{{ u.id }}</td>
+                            <td><strong class="text-white">{{ u.full_name }}</strong></td>
+                            <td>{{ u.email }}</td>
+                            <td><span class="text-warning">{{ u.phone or 'NULL' }}</span></td>
+                            <td>
+                                {% if u.is_profile_completed %}
+                                    <span class="badge border border-success text-success">AUTHENTICATED</span>
+                                {% else %}
+                                    <span class="badge border border-warning text-warning">INCOMPLETE</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ u.devices|length }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLE 2: HARDWARE CLUSTER -->
+    <div class="card cyber-card">
+        <div class="card-header bg-transparent py-3 border-secondary d-flex justify-content-between">
+            <span class="cyber-font text-white fw-bold"><i class="bi bi-motherboard-fill me-2 text-success"></i>HARDWARE_REGISTRY_DATABASE</span>
+            <span class="badge border border-success text-success">{{ devices|length }} UNITS</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-cyber align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>HARDWARE</th>
+                            <th>IMEI_CODE</th>
+                            <th>OPERATOR</th>
+                            <th>PHONE</th>
+                            <th>TELEMETRY_FLAG</th>
+                            <th>OVERRIDE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in devices %}
+                        <tr>
+                            <td><strong>{{ d.brand }}</strong> {{ d.model }}</td>
+                            <td><code style="color: var(--cyber-cyan);">{{ d.imei }}</code></td>
+                            <td>{{ d.owner.full_name }} ({{ d.owner.email }})</td>
+                            <td><span class="text-warning">{{ d.owner.phone }}</span></td>
+                            <td>
+                                {% if d.status == 'NOT_FOR_SALE' %}
+                                    <span class="badge border border-secondary text-light">LOCKED</span>
+                                {% elif d.status == 'FOR_SALE' %}
+                                    <span class="badge border border-success text-success">FOR_SALE</span>
+                                {% elif d.status == 'LOST_OR_STOLEN' %}
+                                    <span class="badge border border-danger text-danger">STOLEN_BEACON</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="/update-status/{{ d.id }}" class="d-flex gap-1">
+                                    <select name="status" class="form-select form-select-sm cyber-input py-0">
+                                        <option value="NOT_FOR_SALE" {% if d.status == 'NOT_FOR_SALE' %}selected{% endif %}>Lock</option>
+                                        <option value="FOR_SALE" {% if d.status == 'FOR_SALE' %}selected{% endif %}>Sell</option>
+                                        <option value="LOST_OR_STOLEN" {% if d.status == 'LOST_OR_STOLEN' %}selected{% endif %}>Stolen</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-cyber-primary px-2">SET</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: UPDATE ROOT PASS -->
+<div class="modal fade" id="adminCredsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content cyber-card text-white">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title cyber-font text-warning"><i class="bi bi-shield-lock-fill"></i> UPDATE_ROOT_CREDENTIALS</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/admin/update-credentials">
+          <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label small text-info fw-bold">&gt; NEW_ROOT_USERNAME</label>
+                <input type="text" name="new_username" class="form-control cyber-input" value="{{ admin_username }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small text-info fw-bold">&gt; NEW_ROOT_PASSWORD</label>
+                <input type="text" name="new_password" class="form-control cyber-input" placeholder="Enter new secret pass" required>
+                <small class="text-muted">// Dynamically rewrites values inside config.py</small>
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">CANCEL</button>
+            <button type="submit" class="btn btn-cyber-primary">APPLY_UPDATE</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('matrixCanvas');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    const chars = '0123456789ABCDEF01010101XYZ日ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ';
+    const fontSize = 16;
+    let columns = Math.floor(canvas.width / fontSize);
+    let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));
+    function drawMatrix() {
+        ctx.fillStyle = 'rgba(10, 14, 20, 0.08)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = fontSize + 'px monospace';
+        for (let i = 0; i < drops.length; i++) {
+            const char = chars[Math.floor(Math.random() * chars.length)];
+            ctx.fillStyle = Math.random() > 0.92 ? '#ffffff' : '#00ff66';
+            ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+            drops[i]++;
+        }
+    }
+    setInterval(drawMatrix, 35);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,2 +1,13 @@
-
+# Sensitive credentials & keys (DO NOT PUSH TO GITHUB)
+config.py
 .env
+
+# Database file
+*.db
+instance/
+
+# Python cache & virtual environment
+__pycache__/
+*.pyc
+.venv/
+venv/
