@@ -1,12 +1,21 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session ,g
 from flask_sqlalchemy import SQLAlchemy
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask_cors import CORS
 
+
 app = Flask(__name__)
-CORS(app)  # Enables Cross-Origin Resource Sharing
+CORS(app)
+
+
+@app.context_processor
+def inject_global_vars():
+    return {
+        'website_name': os.getenv('WEBSITE_NAME', 'SafeDevice'),
+        'current_user': getattr(g, 'user', None)  # Or session user reference
+    }  # Enables Cross-Origin Resource Sharing
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,6 +24,13 @@ load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
+# Set fallback if not defined in .env
+app.config['WEBSITE_NAME'] = os.getenv('WEBSITE_NAME', 'Device Registry')
+
+# Automatically passes website_name to EVERY render_template() call
+@app.context_processor
+def inject_website_name():
+    return dict(website_name=app.config['WEBSITE_NAME'])
 app.secret_key = os.getenv('SECRET_KEY')
 
 # SQLite Database
