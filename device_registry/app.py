@@ -2,13 +2,20 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from authlib.integrations.flask_client import OAuth
-import config
+from dotenv import load_dotenv
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)  # Enables Cross-Origin Resource Sharing
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Allow OAuth over standard HTTP for local development
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
-app.secret_key = config.SECRET_KEY
+app.secret_key = os.getenv('SECRET_KEY')
 
 # SQLite Database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///registry.db'
@@ -19,8 +26,8 @@ oauth = OAuth(app)
 
 google = oauth.register(
     name='google',
-    client_id=config.GOOGLE_CLIENT_ID,
-    client_secret=config.GOOGLE_CLIENT_SECRET,
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
@@ -48,7 +55,7 @@ with app.app_context():
 
 def get_current_user():
     uid = session.get('user_id')
-    return User.query.get(uid) if uid else None
+    return db.session.get(User, uid) if uid else None
 
 # --- ROUTES ---
 
