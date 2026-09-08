@@ -1,16 +1,21 @@
 import os
-import re
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from authlib.integrations.flask_client import OAuth
-import config
 
+# Allow OAuth to run over HTTP for local testing
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
-app.secret_key = config.SECRET_KEY
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///registry.db'
+# --- SECRETS & ENVIRONMENT CONFIGURATION ---
+# Render sets these automatically via the "Environment" tab, or falls back to defaults
+app.secret_key = os.environ.get('SECRET_KEY', 'safedevice-cyber-secret-key-2026')
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', 'YOUR_GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET')
+
+# Database Setup (SQLite)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///registry.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -18,13 +23,21 @@ oauth = OAuth(app)
 
 google = oauth.register(
     name='google',
-    client_id=config.GOOGLE_CLIENT_ID,
-    client_secret=config.GOOGLE_CLIENT_SECRET,
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# --- DATABASE MODELS ---
+# ==========================================
+# 🗄️ DATABASE MODELS
+# ==========================================
+
+class AdminSetting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), default='admin', nullable=False)
+    password = db.Column(db.String(100), default='PUNEETHRKP', nullable=False)
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     google_id = db.Column(db.String(100), unique=True, nullable=True)
@@ -42,14 +55,31 @@ class Device(db.Model):
     status = db.Column(db.String(20), default='NOT_FOR_SALE', nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+# Initialize database tables and seed default admin credentials
 with app.app_context():
     db.create_all()
+    if not AdminSetting.query.first():
+        default_admin = AdminSetting(username='admin', password='PUNEETHRKP')
+        db.session.add(default_admin)
+        db.session.commit()
+
+# --- HELPER FUNCTIONS ---
+
+def get_admin_creds():
+    creds = AdminSetting.query.first()
+    if not creds:
+        creds = AdminSetting(username='admin', password='PUNEETHRKP')
+        db.session.add(creds)
+        db.session.commit()
+    return creds
 
 def get_current_user():
     uid = session.get('user_id')
     return db.session.get(User, uid) if uid else None
 
-# --- PUBLIC ROUTES ---
+# ==========================================
+# 🌐 ROUTES
+# ==========================================
 
 @app.route('/')
 def home():
@@ -72,12 +102,13 @@ def home():
                            search_imei=search_imei, 
                            devices=my_devices)
 
-# Google Login Routes
+# Google Login
 @app.route('/login/google')
 def google_login():
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
+# Google Callback
 @app.route('/auth/callback')
 def google_callback():
     try:
@@ -86,7 +117,7 @@ def google_callback():
 
         google_id = user_info.get('sub')
         google_email = user_info.get('email')
-        google_name = user_info.get('name', 'Owner')
+        google_name = user_info.get('name', 'Operator')
 
         user = User.query.filter((User.google_id == google_id) | (User.email == google_email)).first()
 
@@ -101,7 +132,7 @@ def google_callback():
             db.session.add(user)
             db.session.commit()
             session['user_id'] = user.id
-            flash("Account linked! Please verify your name, email, and emergency contact number.", "info")
+            flash("Identity linked. Set your recovery phone number.", "info")
             return redirect(url_for('edit_profile'))
 
         session['user_id'] = user.id
@@ -110,16 +141,16 @@ def google_callback():
 
         flash(f"Welcome back, {user.full_name}!", "success")
     except Exception as e:
-        flash(f"Login failed: {str(e)}", "danger")
+        flash(f"OAuth Handshake Error: {str(e)}", "danger")
 
     return redirect(url_for('home'))
 
-# Profile Update Route (for regular users)
+# Profile Update
 @app.route('/profile', methods=['GET', 'POST'])
 def edit_profile():
     current_user = get_current_user()
     if not current_user:
-        flash("Please log in first.", "warning")
+        flash("Authorization required.", "warning")
         return redirect(url_for('home'))
 
     if request.method == 'POST':
@@ -128,12 +159,12 @@ def edit_profile():
         new_phone = request.form.get('phone', '').strip()
 
         if not new_phone or len(new_phone) < 10:
-            flash("Please enter a valid emergency recovery phone number.", "danger")
+            flash("Enter a valid emergency recovery phone number.", "danger")
             return render_template('profile.html', user=current_user)
 
         existing = User.query.filter(User.email == new_email, User.id != current_user.id).first()
         if existing:
-            flash("That email address is already in use by another user.", "danger")
+            flash("Comms email belongs to an existing node.", "danger")
             return render_template('profile.html', user=current_user)
 
         current_user.full_name = new_name
@@ -142,13 +173,13 @@ def edit_profile():
         current_user.is_profile_completed = True
         db.session.commit()
 
-        flash("Your profile and emergency contact details have been updated!", "success")
+        flash("Operator identity committed to registry.", "success")
         return redirect(url_for('home'))
 
     return render_template('profile.html', user=current_user)
 
 # ----------------------------------------------------
-# 👑 ADMIN AUTHENTICATION & DASHBOARD
+# 👑 ADMIN AUTHENTICATION & MANAGEMENT
 # ----------------------------------------------------
 
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -159,29 +190,30 @@ def admin_login():
     if request.method == 'POST':
         username = request.form.get('admin_username', '').strip()
         password = request.form.get('admin_password', '').strip()
-
-        # Validates against config.py values
-        if username == config.ADMIN_USERNAME and password == config.ADMIN_PASSWORD:
+        
+        creds = get_admin_creds()
+        if username == creds.username and password == creds.password:
             session['admin_authenticated'] = True
-            flash("Admin authorization successful!", "success")
+            flash("Root access granted.", "success")
             return redirect(url_for('admin_panel'))
         else:
-            flash("Invalid administrator username or password. Access denied.", "danger")
+            flash("Access Denied: Invalid credentials.", "danger")
 
     return render_template('admin_login.html')
 
 @app.route('/admin/logout')
 def admin_logout():
     session.pop('admin_authenticated', None)
-    flash("Admin session closed.", "info")
+    flash("Root terminal session closed.", "info")
     return redirect(url_for('home'))
 
 @app.route('/admin')
 def admin_panel():
     if not session.get('admin_authenticated'):
-        flash("Login required to access administrator records.", "warning")
+        flash("Root session required.", "warning")
         return redirect(url_for('admin_login'))
 
+    creds = get_admin_creds()
     all_users = User.query.all()
     all_devices = Device.query.all()
     stolen_count = Device.query.filter_by(status='LOST_OR_STOLEN').count()
@@ -192,9 +224,8 @@ def admin_panel():
                            devices=all_devices,
                            stolen_count=stolen_count,
                            sale_count=sale_count,
-                           admin_username=config.ADMIN_USERNAME)
+                           admin_username=creds.username)
 
-# EDIT ADMIN USERNAME & PASSWORD
 @app.route('/admin/update-credentials', methods=['POST'])
 def update_admin_credentials():
     if not session.get('admin_authenticated'):
@@ -207,34 +238,19 @@ def update_admin_credentials():
         flash("Username and password cannot be empty.", "danger")
         return redirect(url_for('admin_panel'))
 
-    # Update in-memory values
-    config.ADMIN_USERNAME = new_username
-    config.ADMIN_PASSWORD = new_password
+    creds = get_admin_creds()
+    creds.username = new_username
+    creds.password = new_password
+    db.session.commit()
 
-    # Write changes permanently back to config.py
-    try:
-        config_path = os.path.join(os.path.dirname(__file__), 'config.py')
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Safely replace existing assignments using regex
-        content = re.sub(r'ADMIN_USERNAME\s*=\s*.*', f'ADMIN_USERNAME = "{new_username}"', content)
-        content = re.sub(r'ADMIN_PASSWORD\s*=\s*.*', f'ADMIN_PASSWORD = "{new_password}"', content)
-
-        with open(config_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-        flash(f"Admin credentials updated! New Username: '{new_username}'.", "success")
-    except Exception as e:
-        flash(f"Credentials updated in memory, but could not write to file: {str(e)}", "warning")
-
+    flash(f"Root credentials updated in database! Active Username: '{new_username}'.", "success")
     return redirect(url_for('admin_panel'))
 
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
     session.pop('admin_authenticated', None)
-    flash("Logged out successfully.", "info")
+    flash("Session terminated.", "info")
     return redirect(url_for('home'))
 
 # Register Device
@@ -242,7 +258,7 @@ def logout():
 def register_device():
     current_user = get_current_user()
     if not current_user:
-        flash("Please sign in first.", "danger")
+        flash("Authorization required.", "danger")
         return redirect(url_for('home'))
 
     imei = request.form.get('imei', '').strip()
@@ -251,17 +267,17 @@ def register_device():
     status = request.form.get('status')
 
     if Device.query.filter_by(imei=imei).first():
-        flash("A device with this IMEI is already registered!", "danger")
+        flash("Hardware unit with this IMEI code is already registered.", "danger")
         return redirect(url_for('home'))
 
     new_device = Device(imei=imei, brand=brand, model=model, status=status, user_id=current_user.id)
     db.session.add(new_device)
     db.session.commit()
 
-    flash(f"Device {brand} {model} registered successfully.", "success")
+    flash(f"Hardware {brand} {model} enrolled successfully.", "success")
     return redirect(url_for('home'))
 
-# Update Status (by owner or admin)
+# Update Device State
 @app.route('/update-status/<int:device_id>', methods=['POST'])
 def update_status(device_id):
     current_user = get_current_user()
@@ -271,14 +287,14 @@ def update_status(device_id):
 
     is_admin = session.get('admin_authenticated')
     if not is_admin and (not current_user or device.user_id != current_user.id):
-        flash("Unauthorized modification.", "danger")
+        flash("Unauthorized modification request.", "danger")
         return redirect(url_for('home'))
 
     new_status = request.form.get('status')
     if new_status in ['NOT_FOR_SALE', 'FOR_SALE', 'LOST_OR_STOLEN']:
         device.status = new_status
         db.session.commit()
-        flash(f"Status for {device.brand} {device.model} updated to '{new_status}'!", "info")
+        flash(f"Status for {device.brand} {device.model} set to '{new_status}'.", "info")
 
     return redirect(request.referrer or url_for('home'))
 
