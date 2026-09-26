@@ -3,185 +3,385 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SafeDevice // ROOT_GATEWAY</title>
+    <title>SafeDevice // Root Gateway</title>
     
     <!-- Bootstrap 5 & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
-    <!-- Cyber Fonts -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root {
+            --bg-base: #070709;
+            --glass-surface: rgba(16, 17, 22, 0.88);
+            --border-subtle: rgba(255, 255, 255, 0.08);
             --matrix-green: #00ff66;
-            --cyber-cyan: #00e5ff;
-            --cyber-amber: #ffaa00;
-            --dark-bg: #0a0e14;
-            --panel-bg: rgba(13, 20, 30, 0.88);
-            --panel-border: rgba(255, 170, 0, 0.4);
+            --matrix-glow: rgba(0, 255, 102, 0.15);
+            --text-main: #f5f5f7;
+            --text-muted: rgba(255, 255, 255, 0.55);
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
             margin: 0;
-            background-color: var(--dark-bg);
-            color: #d8e2dc;
-            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg-base);
+            color: var(--text-main);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow-x: hidden;
         }
 
-        #matrixCanvas {
+        /* 1. BINARY DIGITAL STREAM CANVAS (UP TO DOWN) */
+        #binaryCanvas {
             position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: -1;
-            opacity: 0.28;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.55;
+        }
+
+        /* 2. MINIMAL CURTAIN PRELOADER */
+        #loader-overlay {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #15161c 0%, #070709 85%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999999;
+            transition: transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
+            will-change: transform;
+        }
+
+        #loader-overlay.slide-away {
+            transform: translateY(-100%);
             pointer-events: none;
         }
 
-        body::before {
-            content: " ";
-            display: block;
-            position: fixed;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-            background-size: 100% 4px;
-            z-index: 999;
-            pointer-events: none;
-            opacity: 0.6;
+        .loader-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
         }
 
-        .cyber-font {
-            font-family: 'Orbitron', sans-serif;
-            letter-spacing: 1.5px;
+        #loader-num {
+            font-size: clamp(5.5rem, 13vw, 8.5rem);
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1;
+            letter-spacing: -3px;
         }
 
-        .cyber-card {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            backdrop-filter: blur(14px);
-            box-shadow: 0 0 30px rgba(255, 170, 0, 0.2);
+        .loader-track {
+            width: 190px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
+            margin-top: 20px;
+            overflow: hidden;
         }
 
-        .cyber-input {
-            background-color: rgba(5, 8, 15, 0.85) !important;
-            border: 1px solid var(--cyber-amber) !important;
-            color: var(--cyber-amber) !important;
-            font-family: 'JetBrains Mono', monospace;
-            box-shadow: inset 0 0 8px rgba(255, 170, 0, 0.2);
+        #loader-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--matrix-green);
+            box-shadow: 0 0 10px var(--matrix-green);
+            transition: width 0.02s linear;
         }
 
-        .cyber-input:focus {
-            outline: none;
-            box-shadow: 0 0 15px rgba(255, 170, 0, 0.6), inset 0 0 10px rgba(255, 170, 0, 0.4) !important;
-        }
-
-        .btn-cyber-admin {
-            background: transparent;
-            color: var(--cyber-amber);
-            border: 1px solid var(--cyber-amber);
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
+        .loader-tag {
+            margin-top: 16px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 4px;
             text-transform: uppercase;
-            box-shadow: 0 0 10px rgba(255, 170, 0, 0.3);
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 3. AMBIENT GLOW */
+        .ambient-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--matrix-glow) 0%, rgba(0, 0, 0, 0) 70%);
+            filter: blur(80px);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 4. FROSTED GLASS LOGIN CARD */
+        .admin-card {
+            background: var(--glass-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 38px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(0, 255, 102, 0.04);
+            position: relative;
+            z-index: 5;
+        }
+
+        .cyber-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid rgba(0, 255, 102, 0.3);
+            color: var(--matrix-green);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 16px;
+        }
+
+        .gateway-title {
+            font-size: 1.65rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+
+        .gateway-sub {
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            margin-bottom: 26px;
+        }
+
+        .tech-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .admin-input {
+            background-color: #121318 !important;
+            border: 1px solid var(--border-subtle) !important;
+            color: #ffffff !important;
+            border-radius: 12px !important;
+            padding: 13px 16px !important;
+            font-size: 0.95rem;
+            font-family: 'JetBrains Mono', monospace;
             transition: all 0.2s ease;
         }
 
-        .btn-cyber-admin:hover {
-            background: var(--cyber-amber);
-            color: #000;
-            box-shadow: 0 0 25px rgba(255, 170, 0, 0.9);
+        .admin-input:focus {
+            border-color: rgba(0, 255, 102, 0.5) !important;
+            box-shadow: 0 0 16px rgba(0, 255, 102, 0.15) !important;
+            outline: none !important;
         }
 
-        .btn-cyber-abort {
-            border: 1px solid #64748b;
-            color: #94a3b8;
-            font-family: 'Orbitron', sans-serif;
+        .btn-enter {
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 13px 24px;
+            border: none;
+            letter-spacing: 0.5px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s ease;
         }
 
-        .btn-cyber-abort:hover {
-            background: #64748b;
-            color: #fff;
+        .btn-enter:hover {
+            background-color: var(--matrix-green);
+            color: #000000;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(0, 255, 102, 0.4);
+        }
+
+        .btn-subtle {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 11px 24px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-subtle:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 <body>
 
-<canvas id="matrixCanvas"></canvas>
+    <!-- DIGITAL BINARY RAIN CANVAS (0s & 1s) -->
+    <canvas id="binaryCanvas"></canvas>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5 col-lg-4">
+    <!-- PRELOADER -->
+    <div id="loader-overlay">
+        <div class="loader-center">
+            <div id="loader-num">0</div>
+            <div class="loader-track">
+                <div id="loader-fill"></div>
+            </div>
+            <div class="loader-tag">ROOT // SECURITY_CHECK</div>
+        </div>
+    </div>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-dark border border-{{ category }} text-{{ category }} alert-dismissible fade show cyber-card mb-3" role="alert">
-                            <i class="bi bi-shield-x me-2"></i> {{ message }}
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+    <!-- AMBIENT GLOW -->
+    <div class="ambient-glow"></div>
+
+    <div class="container py-4" style="position: relative; z-index: 5;">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+
+                <!-- FLASH NOTIFICATIONS -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-dark border border-danger border-opacity-25 text-white alert-dismissible fade show rounded-3 mb-3 admin-card p-3" role="alert">
+                                <i class="bi bi-shield-x text-danger me-2"></i> {{ message }}
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- LOGIN BOX -->
+                <div class="admin-card">
+                    <div class="text-center mb-3">
+                        <div class="cyber-badge">
+                            <i class="bi bi-shield-lock-fill"></i> PRIVILEGED GATE
                         </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+                        <h1 class="gateway-title">Root Access</h1>
+                        <p class="gateway-sub">Authorize master session to orchestrate registry nodes</p>
+                    </div>
 
-            <div class="card cyber-card p-4">
-                <div class="text-center mb-4">
-                    <i class="bi bi-shield-lock-fill text-warning fs-1"></i>
-                    <h4 class="cyber-font text-white mt-2 mb-1">ROOT_ACCESS_GATE</h4>
-                    <p class="text-muted small">// ADMINISTRATIVE AUTHORIZATION REQUIRED</p>
+                    <form method="POST" action="/admin/login">
+                        <div class="mb-3">
+                            <label class="tech-label">&gt; OPERATOR_IDENTIFIER</label>
+                            <input type="text" name="admin_username" class="form-control admin-input" placeholder="root / admin" required autofocus>
+                        </div>
+                        <div class="mb-4">
+                            <label class="tech-label">&gt; MASTER_SECURITY_KEY</label>
+                            <input type="password" name="admin_password" class="form-control admin-input" placeholder="••••••••••••" required>
+                        </div>
+                        <button type="submit" class="btn btn-enter w-100 mb-2">
+                            <i class="bi bi-unlock-fill me-1"></i> AUTH_AND_ENTER
+                        </button>
+                        <a href="/" class="btn-subtle w-100">
+                            <i class="bi bi-arrow-left me-1"></i> Return to Public View
+                        </a>
+                    </form>
                 </div>
 
-                <form method="POST" action="/admin/login">
-                    <div class="mb-3">
-                        <label class="form-label small text-warning fw-bold">&gt; ADMIN_USERNAME</label>
-                        <input type="text" name="admin_username" class="form-control cyber-input" placeholder="root / admin" required autofocus>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label small text-warning fw-bold">&gt; MASTER_PASSWORD</label>
-                        <input type="password" name="admin_password" class="form-control cyber-input" placeholder="••••••••••••" required>
-                    </div>
-                    <button type="submit" class="btn btn-cyber-admin btn-lg w-100 mb-2">
-                        <i class="bi bi-unlock-fill me-1"></i> AUTH_AND_ENTER
-                    </button>
-                    <a href="/" class="btn btn-cyber-abort w-100">
-                        <i class="bi bi-arrow-left"></i> PUBLIC_PORTAL
-                    </a>
-                </form>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    const canvas = document.getElementById('matrixCanvas');
-    const ctx = canvas.getContext('2d');
-    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    const chars = '0123456789ABCDEF01010101XYZ日ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ';
-    const fontSize = 16;
-    let columns = Math.floor(canvas.width / fontSize);
-    let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));
-    function drawMatrix() {
-        ctx.fillStyle = 'rgba(10, 14, 20, 0.08)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = fontSize + 'px monospace';
-        for (let i = 0; i < drops.length; i++) {
-            const char = chars[Math.floor(Math.random() * chars.length)];
-            ctx.fillStyle = Math.random() > 0.92 ? '#ffffff' : '#00ff66';
-            ctx.fillText(char, i * fontSize, drops[i] * fontSize);
-            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
-            drops[i]++;
+    <!-- PRELOADER JS -->
+    <script>
+        (function () {
+            const numEl = document.getElementById("loader-num");
+            const fillEl = document.getElementById("loader-fill");
+            const overlay = document.getElementById("loader-overlay");
+
+            if (!numEl || !fillEl || !overlay) return;
+
+            let current = 0;
+            const duration = 1100;
+            const stepTime = duration / 100;
+
+            const interval = setInterval(() => {
+                current++;
+                numEl.textContent = current;
+                fillEl.style.width = current + "%";
+
+                if (current >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        overlay.classList.add("slide-away");
+                    }, 140);
+                }
+            }, stepTime);
+        })();
+    </script>
+
+    <!-- BINARY 0s and 1s STREAM ENGINE -->
+    <script>
+        const canvas = document.getElementById('binaryCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
-    }
-    setInterval(drawMatrix, 35);
-</script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const chars = '01'; // Stream exclusively binary 0s and 1s
+        const fontSize = 14;
+        let columns = Math.floor(canvas.width / fontSize);
+        let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));
+
+        function drawBinaryRain() {
+            ctx.fillStyle = 'rgba(7, 7, 9, 0.08)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = fontSize + 'px "JetBrains Mono", monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const char = chars.charAt(Math.floor(Math.random() * chars.length));
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+
+                if (Math.random() > 0.94) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                } else {
+                    ctx.fillStyle = 'rgba(0, 255, 102, 0.38)';
+                }
+
+                ctx.fillText(char, x, y);
+
+                if (y > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawBinaryRain, 33);
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
