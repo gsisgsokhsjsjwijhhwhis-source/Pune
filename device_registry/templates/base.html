@@ -3,188 +3,382 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ website_name }}{% endblock %}</title>
+    <title>{% block title %}SafeDevice // Hardware Registry{% endblock %}</title>
 
+    <!-- Bootstrap 5 & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Modern Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    {% block extra_head %}{% endblock %}
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- MINIMAL LUXURY PRELOADER CSS (MATCHING VIDEO) -->
     <style>
-      * {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      }
+        :root {
+            --bg-base: #070709;
+            --surface-panel: rgba(16, 17, 22, 0.88);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --text-main: #f5f5f7;
+            --text-muted: rgba(255, 255, 255, 0.55);
+            --matrix-green: #00ff66;
+            --cyber-cyan: #00e5ff;
+            --cyber-amber: #f59e0b;
+            --cyber-red: #ff334b;
+        }
 
-      body {
-        background-color: #08080a !important;
-        color: #f3f4f6;
-        min-height: 100vh;
-      }
+        * {
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
 
-      /* Fullscreen Dark Preloader Overlay */
-      #loader-overlay {
-        position: fixed;
-        inset: 0;
-        width: 100vw;
-        height: 100vh;
-        background: #08080a;
-        background: radial-gradient(circle at center, #141418 0%, #060608 85%);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999999;
-        transition: transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
-        will-change: transform;
-      }
+        body {
+            margin: 0;
+            background-color: var(--bg-base) !important;
+            color: var(--text-main);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
 
-      #loader-overlay.slide-away {
-        transform: translateY(-100%);
-        pointer-events: none;
-      }
+        /* DIGITAL STREAM CANVAS */
+        #binaryCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.40;
+        }
 
-      .loader-center {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        user-select: none;
-      }
+        /* CURTAIN PRELOADER */
+        #loader-overlay {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #17181f 0%, #070709 85%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999999;
+            transition: transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
+            will-change: transform;
+        }
 
-      /* Giant Bold Numerical Counter */
-      #loader-num {
-        font-size: clamp(5.5rem, 12vw, 8.5rem);
-        font-weight: 800;
-        color: #ffffff;
-        line-height: 1;
-        letter-spacing: -3px;
-        margin: 0;
-        padding: 0;
-        text-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
-      }
+        #loader-overlay.slide-away {
+            transform: translateY(-100%);
+            pointer-events: none;
+        }
 
-      /* Thin Minimal Progress Line */
-      .loader-track {
-        width: 190px;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 999px;
-        margin-top: 20px;
-        position: relative;
-        overflow: hidden;
-      }
+        .loader-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
 
-      #loader-fill {
-        width: 0%;
-        height: 100%;
-        background: #ffffff;
-        box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
-        transition: width 0.02s linear;
-      }
+        #loader-num {
+            font-size: clamp(5.5rem, 13vw, 8.5rem);
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1;
+            letter-spacing: -3px;
+        }
 
-      /* Subtitle text below the line */
-      .loader-tag {
-        margin-top: 18px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 5px;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.55);
-      }
+        .loader-track {
+            width: 200px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
+            margin-top: 18px;
+            overflow: hidden;
+        }
 
-      /* Navigation Bar */
-      .modern-nav {
-        background: rgba(10, 10, 14, 0.85);
-        backdrop-filter: blur(12px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      }
+        #loader-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--matrix-green);
+            box-shadow: 0 0 10px var(--matrix-green);
+            transition: width 0.02s linear;
+        }
+
+        .loader-tag {
+            margin-top: 16px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* NAVIGATION BAR */
+        .navbar-custom {
+            background: rgba(8, 8, 11, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 16px 0;
+            position: relative;
+            z-index: 10;
+        }
+
+        .brand-logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #ffffff !important;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* LUXURY FROSTED CARDS */
+        .frosted-card {
+            background: var(--surface-panel) !important;
+            border: 1px solid var(--border-subtle);
+            border-radius: 18px;
+            padding: 30px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+            position: relative;
+            z-index: 5;
+            margin-bottom: 24px;
+        }
+
+        /* BOOTSTRAP WHITE TABLE FIX */
+        .table, 
+        .table-responsive, 
+        table, 
+        thead, 
+        tbody, 
+        tr, 
+        th, 
+        td {
+            background: transparent !important;
+            background-color: transparent !important;
+            color: var(--text-main) !important;
+            --bs-table-bg: transparent !important;
+            --bs-table-color: var(--text-main) !important;
+            --bs-table-striped-bg: transparent !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .table th {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.02) !important;
+        }
+
+        .table td {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            padding: 15px 16px;
+            vertical-align: middle;
+            color: #ffffff !important;
+        }
+
+        .mono-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+        }
+
+        /* INPUTS */
+        .input-dark {
+            background-color: #121318 !important;
+            border: 1px solid var(--border-subtle) !important;
+            color: #ffffff !important;
+            border-radius: 10px !important;
+            padding: 12px 16px !important;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .input-dark:focus {
+            border-color: rgba(0, 255, 102, 0.5) !important;
+            box-shadow: 0 0 16px rgba(0, 255, 102, 0.12) !important;
+            outline: none !important;
+        }
+
+        /* BUTTONS */
+        .btn-white {
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 10px 22px;
+            border: none;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .btn-white:hover {
+            background-color: var(--matrix-green);
+            color: #000000;
+        }
+
+        .btn-outline-pill {
+            border: 1px solid var(--border-subtle);
+            color: #ffffff;
+            background: transparent;
+            border-radius: 999px;
+            padding: 6px 16px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-outline-pill:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+        }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body class="pb-5">
 
-    <!-- PRELOADER OVERLAY -->
+    <!-- DIGITAL BINARY STREAM -->
+    <canvas id="binaryCanvas"></canvas>
+
+    <!-- PRELOADER -->
     <div id="loader-overlay">
-      <div class="loader-center">
-        <div id="loader-num">0</div>
-        <div class="loader-track">
-          <div id="loader-fill"></div>
+        <div class="loader-center">
+            <div id="loader-num">0</div>
+            <div class="loader-track">
+                <div id="loader-fill"></div>
+            </div>
+            <div class="loader-tag">SAFEDEVICE PROTOCOL</div>
         </div>
-        <div class="loader-tag">{{ website_name }}</div>
-      </div>
     </div>
 
-    <!-- MODERN TOP NAVBAR -->
-    <nav class="navbar navbar-expand-lg modern-nav mb-5 py-3 shadow-sm">
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-custom mb-5">
         <div class="container">
-            <a class="navbar-brand fw-bold text-white fs-5 tracking-wide" href="/">
-                {{ website_name }}
+            <a class="brand-logo" href="/">
+                <i class="bi bi-shield-check text-success"></i> SafeDevice
             </a>
 
             <div class="d-flex align-items-center gap-2">
-                {% block nav_buttons %}
+                <a href="/admin/login" class="btn-outline-pill">
+                    <i class="bi bi-cpu text-warning me-1"></i> Admin Gate
+                </a>
                 {% if current_user %}
-                    <a href="/profile" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <a href="/profile" class="btn-outline-pill">
                         <i class="bi bi-person-circle me-1"></i> {{ current_user.full_name }}
                     </a>
-                    <a href="/logout" class="btn btn-danger btn-sm rounded-pill px-3">Logout</a>
+                    <a href="/logout" class="btn btn-outline-danger btn-sm rounded-pill px-3">Logout</a>
                 {% else %}
-                    <a href="/login/google" class="btn btn-light btn-sm rounded-pill px-3 fw-semibold">
-                        Sign in with Google
+                    <a href="/login/google" class="btn btn-white btn-sm rounded-pill px-3">
+                        <i class="bi bi-google me-1"></i> Sign In
                     </a>
                 {% endif %}
-                {% endblock %}
             </div>
         </div>
     </nav>
 
-    <div class="container">
-        <!-- FLASH MESSAGES -->
+    <div class="container" style="position: relative; z-index: 5;">
+        <!-- FLASH NOTIFICATIONS -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show border-0 rounded-3 text-white bg-dark mb-4" role="alert">
-                        {{ message }}
+                    <div class="alert alert-dark border border-secondary border-opacity-25 text-white alert-dismissible fade show rounded-3 mb-4 frosted-card p-3" role="alert">
+                        <i class="bi bi-info-circle me-2 text-warning"></i> {{ message }}
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
                     </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <!-- PAGE CONTENT -->
         {% block content %}{% endblock %}
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    {% block extra_js %}{% endblock %}
-
     <!-- PRELOADER SCRIPT -->
     <script>
-      (function () {
-        const numEl = document.getElementById("loader-num");
-        const fillEl = document.getElementById("loader-fill");
-        const overlay = document.getElementById("loader-overlay");
+        (function () {
+            const numEl = document.getElementById("loader-num");
+            const fillEl = document.getElementById("loader-fill");
+            const overlay = document.getElementById("loader-overlay");
 
-        if (!numEl || !fillEl || !overlay) return;
+            if (!numEl || !fillEl || !overlay) return;
 
-        let current = 0;
-        const totalDuration = 1200;
-        const stepTime = totalDuration / 100;
+            let current = 0;
+            const duration = 1100;
+            const stepTime = duration / 100;
 
-        const interval = setInterval(() => {
-          current++;
-          numEl.textContent = current;
-          fillEl.style.width = current + "%";
+            const interval = setInterval(() => {
+                current++;
+                numEl.textContent = current;
+                fillEl.style.width = current + "%";
 
-          if (current >= 100) {
-            clearInterval(interval);
-            setTimeout(() => {
-              overlay.classList.add("slide-away");
-            }, 140);
-          }
-        }, stepTime);
-      })();
+                if (current >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        overlay.classList.add("slide-away");
+                    }, 140);
+                }
+            }, stepTime);
+        })();
     </script>
+
+    <!-- BINARY RAIN STREAM ENGINE -->
+    <script>
+        const canvas = document.getElementById('binaryCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const chars = '01';
+        const fontSize = 14;
+        let columns = Math.floor(canvas.width / fontSize);
+        let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));
+
+        function drawBinaryRain() {
+            ctx.fillStyle = 'rgba(7, 7, 9, 0.08)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = fontSize + 'px "JetBrains Mono", monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const char = chars.charAt(Math.floor(Math.random() * chars.length));
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+
+                if (Math.random() > 0.94) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                } else {
+                    ctx.fillStyle = 'rgba(0, 255, 102, 0.32)';
+                }
+
+                ctx.fillText(char, x, y);
+
+                if (y > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawBinaryRain, 33);
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

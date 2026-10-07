@@ -1,531 +1,157 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SafeDevice // Hardware Verification</title>
-    
-    <!-- Bootstrap 5 & Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <!-- Clean Modern Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+{% extends "base.html" %}
 
-    <style>
-        :root {
-            --bg-color: #08080a;
-            --card-surface: rgba(16, 16, 20, 0.85);
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-focus: rgba(255, 255, 255, 0.3);
-            --text-main: #f5f5f7;
-            --text-muted: rgba(255, 255, 255, 0.55);
-        }
+{% block content %}
+<!-- AMBIENT GLOW -->
+<div style="position: absolute; top: -60px; left: 50%; transform: translateX(-50%); width: 680px; height: 320px; background: radial-gradient(ellipse at center, rgba(0, 255, 102, 0.08) 0%, rgba(0, 0, 0, 0) 70%); filter: blur(80px); z-index: 2; pointer-events: none;"></div>
 
-        * {
-            box-sizing: border-box;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
+<!-- 1. SEARCH SECTION -->
+<div class="frosted-card text-center py-5">
+    <h1 class="fw-bold text-white mb-2" style="font-size: clamp(2rem, 4.5vw, 2.75rem); letter-spacing: -1px;">Hardware Verification</h1>
+    <p class="text-secondary mx-auto mb-4" style="max-width: 540px; font-size: 0.95rem;">
+        Query the global IMEI database to authenticate ownership flags and prevent illegal hardware transfers.
+    </p>
 
-        body {
-            margin: 0;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
-            overflow-x: hidden;
-            position: relative;
-        }
+    <form method="GET" action="/" class="d-flex flex-column flex-sm-row justify-content-center gap-2 mx-auto" style="max-width: 520px;">
+        <input type="text" name="search_imei" class="form-control input-dark text-center text-sm-start" 
+               placeholder="Enter 15-Digit IMEI Code" value="{{ search_imei }}" required autofocus maxlength="15">
+        <button type="submit" class="btn btn-white text-nowrap">Execute Scan</button>
+    </form>
 
-        /* 1. LUXURY MINIMAL PRELOADER (FROM VIDEO) */
-        #loader-overlay {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #08080a;
-            background: radial-gradient(circle at center, #151518 0%, #08080a 80%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 99999999;
-            transition: transform 0.8s cubic-bezier(0.76, 0, 0.24, 1);
-            will-change: transform;
-        }
-
-        #loader-overlay.slide-away {
-            transform: translateY(-100%);
-            pointer-events: none;
-        }
-
-        .loader-center {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-        }
-
-        #loader-num {
-            font-size: clamp(5.5rem, 13vw, 8.5rem);
-            font-weight: 800;
-            color: #ffffff;
-            line-height: 1;
-            letter-spacing: -3px;
-            margin: 0;
-            padding: 0;
-        }
-
-        .loader-track {
-            width: 190px;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 999px;
-            margin-top: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        #loader-fill {
-            width: 0%;
-            height: 100%;
-            background: #ffffff;
-            transition: width 0.02s linear;
-        }
-
-        .loader-tag {
-            margin-top: 16px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        /* 2. AMBIENT BACKDROP GLOW (MATCHING VIDEO HERO) */
-        .ambient-glow {
-            position: absolute;
-            top: -40px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 580px;
-            height: 300px;
-            background: radial-gradient(ellipse at center, rgba(255, 60, 30, 0.2) 0%, rgba(0, 0, 0, 0) 70%);
-            filter: blur(80px);
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        /* 3. MINIMAL NAVBAR */
-        .navbar-minimal {
-            background: rgba(8, 8, 10, 0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border-subtle);
-            padding: 16px 0;
-            position: relative;
-            z-index: 10;
-        }
-
-        .brand-logo {
-            font-size: 1.05rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: #ffffff !important;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* 4. LUXURY FROSTED CARDS */
-        .portal-card {
-            background: var(--card-surface);
-            border: 1px solid var(--border-subtle);
-            border-radius: 18px;
-            padding: 32px;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-            position: relative;
-            z-index: 1;
-            margin-bottom: 24px;
-        }
-
-        .hero-title {
-            font-size: clamp(2rem, 4.5vw, 2.75rem);
-            font-weight: 800;
-            letter-spacing: -1px;
-            color: #ffffff;
-            margin-bottom: 8px;
-        }
-
-        .hero-subtitle {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            max-width: 540px;
-            margin: 0 auto 28px auto;
-        }
-
-        /* 5. FORM CONTROLS */
-        .minimal-input {
-            background-color: #121216 !important;
-            border: 1px solid var(--border-subtle) !important;
-            color: #ffffff !important;
-            border-radius: 12px !important;
-            padding: 14px 18px !important;
-            font-size: 0.95rem;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .minimal-input:focus {
-            border-color: var(--border-focus) !important;
-            box-shadow: 0 0 16px rgba(255, 255, 255, 0.05) !important;
-            outline: none !important;
-        }
-
-        .minimal-input::placeholder {
-            color: rgba(255, 255, 255, 0.3) !important;
-        }
-
-        .field-label {
-            font-size: 0.78rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-
-        /* 6. BUTTONS */
-        .btn-white {
-            background-color: #ffffff;
-            color: #000000;
-            font-weight: 700;
-            border-radius: 12px;
-            padding: 13px 26px;
-            border: none;
-            transition: all 0.2s ease;
-        }
-
-        .btn-white:hover {
-            background-color: #e5e5ea;
-            color: #000000;
-            transform: translateY(-1px);
-        }
-
-        .btn-outline-minimal {
-            border: 1px solid var(--border-subtle);
-            color: #ffffff;
-            background: transparent;
-            border-radius: 999px;
-            padding: 6px 16px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            text-decoration: none;
-        }
-
-        .btn-outline-minimal:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.25);
-            color: #ffffff;
-        }
-
-        /* 7. DATA TABLE */
-        .table-minimal {
-            color: var(--text-main);
-            margin-bottom: 0;
-        }
-
-        .table-minimal th {
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-subtle);
-            padding: 14px 16px;
-        }
-
-        .table-minimal td {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 16px;
-            vertical-align: middle;
-        }
-
-        /* 8. STATUS BADGES */
-        .badge-pill-locked {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #ffffff;
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .badge-pill-sale {
-            background: rgba(48, 209, 88, 0.12);
-            border: 1px solid rgba(48, 209, 88, 0.3);
-            color: #30d158;
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .badge-pill-stolen {
-            background: rgba(255, 69, 58, 0.15);
-            border: 1px solid rgba(255, 69, 58, 0.4);
-            color: #ff453a;
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-    </style>
-</head>
-<body>
-
-    <!-- PRELOADER OVERLAY -->
-    <div id="loader-overlay">
-        <div class="loader-center">
-            <div id="loader-num">0</div>
-            <div class="loader-track">
-                <div id="loader-fill"></div>
-            </div>
-            <div class="loader-tag">SAFEDEVICE PROTOCOL</div>
-        </div>
-    </div>
-
-    <!-- AMBIENT GLOW EFFECT -->
-    <div class="ambient-glow"></div>
-
-    <!-- TOP NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-minimal mb-5">
-        <div class="container">
-            <a class="brand-logo" href="/">
-                <i class="bi bi-shield-check"></i> SafeDevice
-            </a>
-
-            <div class="d-flex align-items-center gap-2">
-                <a href="/admin/login" class="btn-outline-minimal">Admin Gate</a>
-                {% if current_user %}
-                    <a href="/profile" class="btn-outline-minimal">
-                        <i class="bi bi-person-circle me-1"></i> {{ current_user.full_name }}
-                    </a>
-                    <a href="/logout" class="btn btn-sm btn-outline-danger rounded-pill px-3">Logout</a>
-                {% else %}
-                    <a href="/login/google" class="btn btn-white btn-sm rounded-pill px-3">
-                        <i class="bi bi-google me-1"></i> Sign in with Google
-                    </a>
+    <!-- SCAN RESULTS -->
+    {% if search_imei %}
+        <div class="mt-4 text-start mx-auto" style="max-width: 650px;">
+            {% if search_result %}
+                {% if search_result.status == 'NOT_FOR_SALE' %}
+                    <div class="frosted-card p-4 border-warning border-opacity-25" style="background: rgba(245, 158, 11, 0.04) !important;">
+                        <h5 class="fw-bold text-warning mb-2"><i class="bi bi-shield-lock-fill me-2"></i> Flag: Locked // Not For Sale</h5>
+                        <p class="mb-2 text-white">Device <strong>{{ search_result.brand }} {{ search_result.model }}</strong> is active personal property and not authorized for transfer.</p>
+                        <div class="small text-secondary mono-cell mt-3 pt-3 border-top border-secondary border-opacity-25">
+                            <div><strong>OPERATOR:</strong> {{ search_result.owner.full_name }}</div>
+                            <div><strong>CONTACT:</strong> {{ search_result.owner.phone }}</div>
+                        </div>
+                    </div>
+                {% elif search_result.status == 'FOR_SALE' %}
+                    <div class="frosted-card p-4 border-success border-opacity-25" style="background: rgba(0, 255, 102, 0.04) !important;">
+                        <h5 class="fw-bold text-success mb-2"><i class="bi bi-shield-check me-2"></i> Flag: Authorized For Sale</h5>
+                        <p class="mb-2 text-white">Transfer authorized by registered operator <strong>{{ search_result.owner.full_name }}</strong> for <strong>{{ search_result.brand }} {{ search_result.model }}</strong>.</p>
+                        <div class="small text-secondary mono-cell mt-3 pt-3 border-top border-secondary border-opacity-25">
+                            <div><strong>VERIFICATION CHANNEL:</strong> {{ search_result.owner.phone }}</div>
+                        </div>
+                    </div>
+                {% elif search_result.status == 'LOST_OR_STOLEN' %}
+                    <div class="frosted-card p-4 border-danger border-opacity-25" style="background: rgba(255, 51, 75, 0.08) !important;">
+                        <h5 class="fw-bold text-danger mb-2"><i class="bi bi-exclamation-octagon-fill me-2"></i> Critical: Reported Stolen / Lost</h5>
+                        <p class="text-white fw-bold mb-2">Unauthorized hardware. Contact authorities or notify the owner immediately.</p>
+                        <div class="small text-white mono-cell mt-3 pt-3 border-top border-danger border-opacity-25">
+                            <div><strong>OWNER:</strong> {{ search_result.owner.full_name }}</div>
+                            <div><strong>EMERGENCY CONTACT:</strong> <span class="text-warning fw-bold">{{ search_result.owner.phone }}</span></div>
+                            <div><strong>EMAIL:</strong> {{ search_result.owner.email }}</div>
+                        </div>
+                    </div>
                 {% endif %}
-            </div>
-        </div>
-    </nav>
-
-    <div class="container" style="position: relative; z-index: 2;">
-        
-        <!-- FLASH NOTIFICATIONS -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-dark border border-secondary border-opacity-25 text-white alert-dismissible fade show rounded-3 mb-4" role="alert">
-                        <i class="bi bi-info-circle me-2"></i> {{ message }}
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
+            {% else %}
+                <div class="frosted-card text-center text-secondary py-4">
+                    <i class="bi bi-slash-circle me-1"></i> Record not found: IMEI <code class="text-info">{{ search_imei }}</code> is not enrolled in the registry.
+                </div>
             {% endif %}
-        {% endwith %}
+        </div>
+    {% endif %}
+</div>
 
-        <!-- 1. SEARCH / VERIFICATION SECTION -->
-        <div class="portal-card text-center py-5">
-            <h1 class="hero-title">Hardware Verification</h1>
-            <p class="hero-subtitle">
-                Execute database queries to authenticate ownership flags and prevent black-market device resale.
-            </p>
-            
-            <form method="GET" action="/" class="d-flex flex-column flex-sm-row justify-content-center gap-2 mx-auto" style="max-width: 520px;">
-                <input type="text" name="search_imei" class="form-control minimal-input text-center text-sm-start" 
-                       placeholder="Enter 15-Digit IMEI Code" value="{{ search_imei }}" required autofocus maxlength="15">
-                <button type="submit" class="btn btn-white text-nowrap">Execute Scan</button>
+<!-- 2. USER HARDWARE PANEL -->
+{% if current_user %}
+<div class="row g-4 mb-5">
+    <div class="col-lg-5">
+        <div class="frosted-card h-100">
+            <h5 class="fw-bold text-white mb-4"><i class="bi bi-plus-circle text-success me-2"></i>Enroll Hardware</h5>
+            <form method="POST" action="/register-device">
+                <div class="mb-3">
+                    <label class="form-label small text-secondary fw-semibold">Manufacturer / Brand</label>
+                    <input type="text" name="brand" class="form-control input-dark" placeholder="e.g. Apple, OnePlus" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-secondary fw-semibold">Model Identifier</label>
+                    <input type="text" name="model" class="form-control input-dark" placeholder="e.g. iPhone 16 Pro, S24" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-secondary fw-semibold">15-Digit IMEI Code</label>
+                    <input type="text" name="imei" class="form-control input-dark" placeholder="Enter device IMEI" required maxlength="15">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small text-secondary fw-semibold">Initial Security Flag</label>
+                    <select name="status" class="form-select input-dark">
+                        <option value="NOT_FOR_SALE" selected>Locked // Not For Sale</option>
+                        <option value="FOR_SALE">Unlocked // For Sale</option>
+                        <option value="LOST_OR_STOLEN">Flagged // Stolen or Lost</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-white w-100">Register to Account</button>
             </form>
-
-            <!-- SCAN RESULT OUTPUTS -->
-            {% if search_imei %}
-                <div class="mt-4 text-start mx-auto" style="max-width: 650px;">
-                    {% if search_result %}
-                        {% if search_result.status == 'NOT_FOR_SALE' %}
-                            <div class="portal-card p-4 border-warning border-opacity-25" style="background: rgba(255, 170, 0, 0.05);">
-                                <h4 class="fw-bold text-warning mb-2"><i class="bi bi-shield-x me-2"></i> Flag: Locked // Not For Sale</h4>
-                                <p class="mb-2">Device <strong>{{ search_result.brand }} {{ search_result.model }}</strong> is active personal property and not authorized for transfer.</p>
-                                <hr class="border-secondary opacity-25">
-                                <div class="small text-secondary">
-                                    <div><strong>Operator:</strong> {{ search_result.owner.full_name }}</div>
-                                    <div><strong>Email:</strong> {{ search_result.owner.email }}</div>
-                                    <div><strong>Contact:</strong> {{ search_result.owner.phone }}</div>
-                                </div>
-                            </div>
-                        {% elif search_result.status == 'FOR_SALE' %}
-                            <div class="portal-card p-4 border-success border-opacity-25" style="background: rgba(48, 209, 88, 0.05);">
-                                <h4 class="fw-bold text-success mb-2"><i class="bi bi-shield-check me-2"></i> Flag: Authorized For Sale</h4>
-                                <p class="mb-2">Ownership transfer is approved by registered operator <strong>{{ search_result.owner.full_name }}</strong> for <strong>{{ search_result.brand }} {{ search_result.model }}</strong>.</p>
-                                <div class="small text-secondary">Verification Channel: {{ search_result.owner.phone }} // {{ search_result.owner.email }}</div>
-                            </div>
-                        {% elif search_result.status == 'LOST_OR_STOLEN' %}
-                            <div class="portal-card p-4 border-danger border-opacity-25" style="background: rgba(255, 69, 58, 0.08);">
-                                <h4 class="fw-bold text-danger mb-2"><i class="bi bi-exclamation-octagon-fill me-2"></i> Critical: Reported Stolen / Lost</h4>
-                                <p class="text-white fw-bold mb-2">Unauthorized hardware. Contact authorities or notify the owner immediately.</p>
-                                <hr class="border-danger opacity-25">
-                                <div class="small text-white">
-                                    <div><strong>Owner:</strong> {{ search_result.owner.full_name }}</div>
-                                    <div><strong>Emergency Contact:</strong> <span class="text-warning">{{ search_result.owner.phone }}</span></div>
-                                    <div><strong>Email:</strong> {{ search_result.owner.email }}</div>
-                                </div>
-                            </div>
-                        {% endif %}
-                    {% else %}
-                        <div class="portal-card text-center text-secondary py-4">
-                            <i class="bi bi-slash-circle me-1"></i> Record not found: IMEI <code>{{ search_imei }}</code> does not exist in registry.
-                        </div>
-                    {% endif %}
-                </div>
-            {% endif %}
         </div>
-
-        <!-- 2. OWNER SECTION -->
-        {% if current_user %}
-        <div class="row g-4 mb-5">
-            <!-- DEVICE REGISTRATION -->
-            <div class="col-lg-5">
-                <div class="portal-card h-100">
-                    <h5 class="fw-bold text-white mb-4">Enroll Hardware</h5>
-                    <form method="POST" action="/register-device">
-                        <div class="mb-3">
-                            <label class="field-label">Manufacturer / Brand</label>
-                            <input type="text" name="brand" class="form-control minimal-input" placeholder="e.g. Apple, OnePlus" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="field-label">Model Identifier</label>
-                            <input type="text" name="model" class="form-control minimal-input" placeholder="e.g. iPhone 16 Pro, S24" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="field-label">15-Digit IMEI Code</label>
-                            <input type="text" name="imei" class="form-control minimal-input" placeholder="Enter device IMEI" required maxlength="15">
-                        </div>
-                        <div class="mb-4">
-                            <label class="field-label">Initial Security Flag</label>
-                            <select name="status" class="form-select minimal-input">
-                                <option value="NOT_FOR_SALE" selected>Locked // Not For Sale</option>
-                                <option value="FOR_SALE">Unlocked // For Sale</option>
-                                <option value="LOST_OR_STOLEN">Flagged // Stolen or Lost</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-white w-100">Register to Account</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- USER REGISTERED DEVICES -->
-            <div class="col-lg-7">
-                <div class="portal-card h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="fw-bold text-white mb-0">Registered Devices</h5>
-                        <span class="badge-pill-locked">{{ devices|length }} Devices</span>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-minimal align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Hardware</th>
-                                    <th>IMEI</th>
-                                    <th>Status Flag</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for dev in devices %}
-                                <tr>
-                                    <td class="fw-semibold text-white">{{ dev.brand }} {{ dev.model }}</td>
-                                    <td class="text-secondary font-monospace">{{ dev.imei }}</td>
-                                    <td>
-                                        {% if dev.status == 'NOT_FOR_SALE' %}
-                                            <span class="badge-pill-locked">Locked</span>
-                                        {% elif dev.status == 'FOR_SALE' %}
-                                            <span class="badge-pill-sale">For Sale</span>
-                                        {% elif dev.status == 'LOST_OR_STOLEN' %}
-                                            <span class="badge-pill-stolen">Stolen</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="/update-status/{{ dev.id }}" class="d-flex gap-2">
-                                            <select name="status" class="form-select form-select-sm minimal-input py-1" style="min-width: 100px;">
-                                                <option value="NOT_FOR_SALE" {% if dev.status == 'NOT_FOR_SALE' %}selected{% endif %}>Lock</option>
-                                                <option value="FOR_SALE" {% if dev.status == 'FOR_SALE' %}selected{% endif %}>Sell</option>
-                                                <option value="LOST_OR_STOLEN" {% if dev.status == 'LOST_OR_STOLEN' %}selected{% endif %}>Stolen</option>
-                                            </select>
-                                            <button type="submit" class="btn btn-sm btn-white px-3">Set</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="4" class="text-center py-4 text-secondary">No hardware nodes linked to this account yet.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <!-- GUEST VISITOR CALLOUT -->
-        <div class="portal-card text-center p-5 mb-5">
-            <h3 class="fw-bold mb-3 text-white">Authenticate Hardware Ownership</h3>
-            <p class="text-secondary mb-4 col-md-7 mx-auto">
-                Authorize your Google credential to enroll mobile devices, manage anti-theft flags, and prevent fraudulent resale across secondary markets.
-            </p>
-            <div>
-                <a href="/login/google" class="btn btn-white px-5 py-3 rounded-pill fw-bold">
-                    <i class="bi bi-google me-2"></i> Sign In With Google
-                </a>
-            </div>
-        </div>
-        {% endif %}
-
     </div>
 
-    <!-- PRELOADER ANIMATION SCRIPT (FROM VIDEO) -->
-    <script>
-        (function () {
-            const numEl = document.getElementById("loader-num");
-            const fillEl = document.getElementById("loader-fill");
-            const overlay = document.getElementById("loader-overlay");
+    <div class="col-lg-7">
+        <div class="frosted-card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold text-white mb-0"><i class="bi bi-phone text-info me-2"></i>Registered Hardware</h5>
+                <span class="badge border border-secondary text-secondary rounded-pill px-3">{{ devices|length }} Nodes</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Hardware</th>
+                            <th>IMEI</th>
+                            <th>Status Flag</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dev in devices %}
+                        <tr>
+                            <td class="fw-semibold text-white">{{ dev.brand }} {{ dev.model }}</td>
+                            <td class="mono-cell text-info">{{ dev.imei }}</td>
+                            <td>
+                                {% if dev.status == 'NOT_FOR_SALE' %}
+                                    <span class="badge border border-secondary text-light">Locked</span>
+                                {% elif dev.status == 'FOR_SALE' %}
+                                    <span class="badge border border-success text-success">For Sale</span>
+                                {% elif dev.status == 'LOST_OR_STOLEN' %}
+                                    <span class="badge border border-danger text-danger">Stolen</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="/update-status/{{ dev.id }}" class="d-flex gap-2">
+                                    <select name="status" class="form-select form-select-sm input-dark py-1" style="min-width: 95px;">
+                                        <option value="NOT_FOR_SALE" {% if dev.status == 'NOT_FOR_SALE' %}selected{% endif %}>Lock</option>
+                                        <option value="FOR_SALE" {% if dev.status == 'FOR_SALE' %}selected{% endif %}>Sell</option>
+                                        <option value="LOST_OR_STOLEN" {% if dev.status == 'LOST_OR_STOLEN' %}selected{% endif %}>Stolen</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-white btn-sm px-2">Set</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-secondary">No hardware nodes linked to this account yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="frosted-card text-center p-5 mb-5">
+    <h3 class="fw-bold text-white mb-3">Authenticate Hardware Ownership</h3>
+    <p class="text-secondary mb-4 mx-auto" style="max-width: 580px;">
+        Authorize your Google credential to enroll mobile devices, manage anti-theft flags, and prevent fraudulent resale across secondary markets.
+    </p>
+    <a href="/login/google" class="btn btn-white px-5 py-3 rounded-pill fw-bold">
+        <i class="bi bi-google me-2"></i> Sign In With Google
+    </a>
+</div>
+{% endif %}
 
-            if (!numEl || !fillEl || !overlay) return;
-
-            let current = 0;
-            const duration = 1200; // 1.2s total run time
-            const stepTime = duration / 100;
-
-            const interval = setInterval(() => {
-                current++;
-                numEl.textContent = current;
-                fillEl.style.width = current + "%";
-
-                if (current >= 100) {
-                    clearInterval(interval);
-                    setTimeout(() => {
-                        overlay.classList.add("slide-away");
-                    }, 140);
-                }
-            }, stepTime);
-        })();
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+{% endblock %}

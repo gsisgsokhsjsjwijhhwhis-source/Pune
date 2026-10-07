@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
-    <!-- Fonts -->
+    <!-- Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,14 +17,14 @@
     <style>
         :root {
             --bg-base: #070709;
-            --surface-panel: rgba(16, 17, 22, 0.86);
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-hover: rgba(255, 255, 255, 0.18);
+            --surface-panel: rgba(16, 17, 22, 0.92);
+            --border-subtle: rgba(255, 255, 255, 0.10);
+            --border-hover: rgba(255, 255, 255, 0.22);
             --text-main: #f5f5f7;
-            --text-muted: rgba(255, 255, 255, 0.5);
+            --text-muted: rgba(255, 255, 255, 0.60);
             --matrix-green: #00ff66;
-            --cyan-color: #06b6d4;
-            --crimson-color: #ef4444;
+            --cyan-color: #00e5ff;
+            --crimson-color: #ff334b;
             --amber-color: #f59e0b;
         }
 
@@ -35,14 +35,14 @@
 
         body {
             margin: 0;
-            background-color: var(--bg-base);
+            background-color: var(--bg-base) !important;
             color: var(--text-main);
             min-height: 100vh;
             position: relative;
             overflow-x: hidden;
         }
 
-        /* 1. BINARY STREAM CANVAS */
+        /* DIGITAL STREAM CANVAS */
         #binaryCanvas {
             position: fixed;
             top: 0;
@@ -51,10 +51,10 @@
             height: 100vh;
             z-index: 1;
             pointer-events: none;
-            opacity: 0.45;
+            opacity: 0.38;
         }
 
-        /* 2. MINIMAL CURTAIN PRELOADER */
+        /* CURTAIN PRELOADER */
         #loader-overlay {
             position: fixed;
             inset: 0;
@@ -117,23 +117,9 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* 3. AMBIENT GLOW */
-        .ambient-glow {
-            position: absolute;
-            top: -60px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 700px;
-            height: 350px;
-            background: radial-gradient(ellipse at center, rgba(0, 255, 102, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
-            filter: blur(80px);
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        /* 4. MODERN NAVBAR */
+        /* NAVBAR */
         .navbar-admin {
-            background: rgba(8, 8, 11, 0.85);
+            background: rgba(8, 8, 11, 0.90);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border-subtle);
@@ -145,14 +131,13 @@
         .brand-text {
             font-size: 1.05rem;
             font-weight: 700;
-            letter-spacing: 0.5px;
             color: #ffffff;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .brand-text .telemetry-pill {
+        .telemetry-pill {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.68rem;
             color: var(--matrix-green);
@@ -162,37 +147,30 @@
             border-radius: 6px;
         }
 
-        /* 5. FROSTED OPS CARDS */
+        /* OPS PANELS */
         .ops-card {
-            background: var(--surface-panel);
+            background: var(--surface-panel) !important;
             border: 1px solid var(--border-subtle);
             border-radius: 18px;
-            padding: 26px;
+            padding: 24px;
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
             position: relative;
             z-index: 5;
             margin-bottom: 24px;
         }
 
-        /* METRIC CARDS */
+        /* METRICS */
         .metric-card {
-            background: var(--surface-panel);
+            background: var(--surface-panel) !important;
             border: 1px solid var(--border-subtle);
             border-radius: 16px;
-            padding: 22px;
+            padding: 20px;
             backdrop-filter: blur(18px);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
             position: relative;
             overflow: hidden;
-            transition: all 0.2s ease;
             z-index: 5;
-        }
-
-        .metric-card:hover {
-            border-color: var(--border-hover);
-            transform: translateY(-2px);
         }
 
         .metric-card::before {
@@ -204,10 +182,10 @@
             height: 100%;
         }
 
-        .metric-card.cyan::before { background: var(--cyan-color); box-shadow: 0 0 10px var(--cyan-color); }
-        .metric-card.emerald::before { background: var(--matrix-green); box-shadow: 0 0 10px var(--matrix-green); }
-        .metric-card.crimson::before { background: var(--crimson-color); box-shadow: 0 0 10px var(--crimson-color); }
-        .metric-card.amber::before { background: var(--amber-color); box-shadow: 0 0 10px var(--amber-color); }
+        .metric-card.cyan::before { background: var(--cyan-color); }
+        .metric-card.emerald::before { background: var(--matrix-green); }
+        .metric-card.crimson::before { background: var(--crimson-color); }
+        .metric-card.amber::before { background: var(--amber-color); }
 
         .metric-label {
             font-size: 0.72rem;
@@ -223,15 +201,29 @@
             font-size: 2.2rem;
             font-weight: 800;
             line-height: 1;
-            color: #ffffff;
             font-family: 'JetBrains Mono', monospace;
             margin: 0;
         }
 
-        /* 6. TELEMETRY TABLES */
-        .table-telemetry {
-            color: var(--text-main);
-            margin-bottom: 0;
+        /* ======================================================== */
+        /* CRITICAL TABLE TRANSPARENCY FIX OVERRIDING BOOTSTRAP */
+        /* ======================================================== */
+        .table, 
+        .table-responsive, 
+        .table-telemetry,
+        table, 
+        thead, 
+        tbody, 
+        tr, 
+        th, 
+        td {
+            background: transparent !important;
+            background-color: transparent !important;
+            color: var(--text-main) !important;
+            --bs-table-bg: transparent !important;
+            --bs-table-color: var(--text-main) !important;
+            --bs-table-striped-bg: transparent !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
         }
 
         .table-telemetry th {
@@ -239,16 +231,18 @@
             font-weight: 700;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-subtle);
+            color: rgba(255, 255, 255, 0.6) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
             padding: 14px 16px;
             font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.02) !important;
         }
 
         .table-telemetry td {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 15px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            padding: 14px 16px;
             vertical-align: middle;
+            color: #ffffff !important;
         }
 
         .mono-cell {
@@ -256,7 +250,7 @@
             font-size: 0.88rem;
         }
 
-        /* 7. STATUS BADGES */
+        /* STATUS BADGES */
         .badge-telemetry {
             display: inline-flex;
             align-items: center;
@@ -266,46 +260,27 @@
             font-size: 0.72rem;
             font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
-            letter-spacing: 0.5px;
         }
 
         .badge-locked {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff !important;
         }
 
         .badge-sale {
-            background: rgba(0, 255, 102, 0.12);
-            border: 1px solid rgba(0, 255, 102, 0.35);
-            color: var(--matrix-green);
+            background: rgba(0, 255, 102, 0.12) !important;
+            border: 1px solid rgba(0, 255, 102, 0.4);
+            color: var(--matrix-green) !important;
         }
 
         .badge-stolen {
-            background: rgba(239, 68, 68, 0.14);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: #f87171;
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+            background: rgba(255, 51, 75, 0.15) !important;
+            border: 1px solid rgba(255, 51, 75, 0.45);
+            color: #ff6677 !important;
         }
 
-        /* 8. BUTTONS & INPUTS */
-        .btn-action-white {
-            background-color: #ffffff;
-            color: #000000;
-            font-weight: 700;
-            border-radius: 8px;
-            padding: 5px 14px;
-            font-size: 0.78rem;
-            border: none;
-            font-family: 'JetBrains Mono', monospace;
-            transition: all 0.2s ease;
-        }
-
-        .btn-action-white:hover {
-            background-color: var(--matrix-green);
-            color: #000000;
-        }
-
+        /* INPUTS & BUTTONS */
         .input-dark {
             background-color: #121318 !important;
             border: 1px solid var(--border-subtle) !important;
@@ -315,9 +290,20 @@
             font-size: 0.85rem;
         }
 
-        .input-dark:focus {
-            border-color: rgba(0, 255, 102, 0.5) !important;
-            box-shadow: none !important;
+        .btn-action-white {
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 700;
+            border-radius: 8px;
+            padding: 5px 14px;
+            font-size: 0.78rem;
+            border: none;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-action-white:hover {
+            background-color: var(--matrix-green);
+            color: #000000;
         }
 
         .btn-outline-pill {
@@ -329,19 +315,17 @@
             font-size: 0.82rem;
             font-weight: 600;
             text-decoration: none;
-            transition: all 0.2s ease;
         }
 
         .btn-outline-pill:hover {
             background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.25);
             color: #ffffff;
         }
     </style>
 </head>
 <body class="pb-5">
 
-    <!-- DIGITAL BINARY RAIN CANVAS (0s & 1s) -->
+    <!-- BINARY CANVAS -->
     <canvas id="binaryCanvas"></canvas>
 
     <!-- PRELOADER -->
@@ -354,9 +338,6 @@
             <div class="loader-tag">ROOT // INITIALIZING_PANEL</div>
         </div>
     </div>
-
-    <!-- AMBIENT GLOW -->
-    <div class="ambient-glow"></div>
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-admin mb-4">
@@ -391,7 +372,7 @@
             {% endif %}
         {% endwith %}
 
-        <!-- METRIC TELEMETRY CARDS -->
+        <!-- METRIC CARDS -->
         <div class="row g-3 mb-4">
             <div class="col-6 col-md-3">
                 <div class="metric-card cyan">
@@ -408,7 +389,7 @@
             <div class="col-6 col-md-3">
                 <div class="metric-card crimson">
                     <div class="metric-label">FLAGGED_STOLEN</div>
-                    <div class="metric-val" style="color: #f87171;">{{ stolen_count }}</div>
+                    <div class="metric-val" style="color: #ff6677;">{{ stolen_count }}</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
@@ -428,7 +409,7 @@
                 <span class="badge border border-secondary text-secondary rounded-pill px-3">{{ users|length }} Entries</span>
             </div>
             <div class="table-responsive">
-                <table class="table table-telemetry align-middle">
+                <table class="table table-telemetry align-middle mb-0">
                     <thead>
                         <tr>
                             <th>UID</th>
@@ -444,7 +425,7 @@
                         <tr>
                             <td class="mono-cell text-secondary">#{{ u.id }}</td>
                             <td class="fw-semibold text-white">{{ u.full_name }}</td>
-                            <td class="text-secondary mono-cell">{{ u.email }}</td>
+                            <td class="text-white mono-cell">{{ u.email }}</td>
                             <td class="mono-cell text-warning">{{ u.phone or 'NULL' }}</td>
                             <td>
                                 {% if u.is_profile_completed %}
@@ -461,7 +442,7 @@
             </div>
         </div>
 
-        <!-- TABLE 2: HARDWARE REGISTRY CLUSTER -->
+        <!-- TABLE 2: HARDWARE REGISTRY -->
         <div class="ops-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold text-white mb-0">
@@ -470,23 +451,23 @@
                 <span class="badge border border-secondary text-secondary rounded-pill px-3">{{ devices|length }} Units</span>
             </div>
             <div class="table-responsive">
-                <table class="table table-telemetry align-middle">
+                <table class="table table-telemetry align-middle mb-0">
                     <thead>
                         <tr>
-                            <th>Hardware</th>
-                            <th>IMEI Code</th>
-                            <th>Operator</th>
-                            <th>Phone</th>
-                            <th>Telemetry Flag</th>
-                            <th>Override</th>
+                            <th>HARDWARE</th>
+                            <th>IMEI CODE</th>
+                            <th>OPERATOR</th>
+                            <th>PHONE</th>
+                            <th>STATUS</th>
+                            <th>OVERRIDE</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for d in devices %}
                         <tr>
-                            <td class="fw-semibold text-white">{{ d.brand }} {{ d.model }}</td>
-                            <td class="mono-cell text-info">{{ d.imei }}</td>
-                            <td class="text-secondary">{{ d.owner.full_name }} <small class="text-muted">({{ d.owner.email }})</small></td>
+                            <td class="fw-bold text-white">{{ d.brand }} {{ d.model }}</td>
+                            <td class="mono-cell" style="color: #00e5ff; font-weight: 600;">{{ d.imei }}</td>
+                            <td class="text-white">{{ d.owner.full_name }} <br><small class="text-secondary">({{ d.owner.email }})</small></td>
                             <td class="mono-cell text-warning">{{ d.owner.phone }}</td>
                             <td>
                                 {% if d.status == 'NOT_FOR_SALE' %}
@@ -494,7 +475,7 @@
                                 {% elif d.status == 'FOR_SALE' %}
                                     <span class="badge-telemetry badge-sale">FOR_SALE</span>
                                 {% elif d.status == 'LOST_OR_STOLEN' %}
-                                    <span class="badge-telemetry badge-stolen">STOLEN_BEACON</span>
+                                    <span class="badge-telemetry badge-stolen">STOLEN</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -530,17 +511,17 @@
                     <div class="modal-body">
                         <div class="mb-3">
                             <label class="form-label small text-secondary fw-semibold">New Root Username</label>
-                            <input type="text" name="new_username" class="form-control input-dark" value="{{ admin_username }}" required>
+                            <input type="text" name="new_username" class="form-control input-dark" value="{{ admin_username }}" required maxlength="64">
                         </div>
                         <div class="mb-3">
                             <label class="form-label small text-secondary fw-semibold">New Root Password</label>
-                            <input type="text" name="new_password" class="form-control input-dark" placeholder="Enter new secret key" required>
-                            <small class="text-secondary opacity-75 d-block mt-1">Dynamically rewrites values inside config.py</small>
+                            <input type="password" name="new_password" class="form-control input-dark" placeholder="Enter new secret key" required minlength="8" maxlength="128">
+                            <small class="text-secondary opacity-75 d-block mt-1">Hashes securely and persists to database</small>
                         </div>
                     </div>
                     <div class="modal-footer border-secondary border-opacity-25">
                         <button type="button" class="btn btn-outline-pill" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success fw-bold px-4" style="border-radius: 8px;">Apply Update</button>
+                        <button type="submit" class="btn btn-action-white px-4">Apply Update</button>
                     </div>
                 </form>
             </div>
@@ -557,7 +538,7 @@
             if (!numEl || !fillEl || !overlay) return;
 
             let current = 0;
-            const duration = 1200;
+            const duration = 1000;
             const stepTime = duration / 100;
 
             const interval = setInterval(() => {
@@ -569,13 +550,13 @@
                     clearInterval(interval);
                     setTimeout(() => {
                         overlay.classList.add("slide-away");
-                    }, 140);
+                    }, 120);
                 }
             }, stepTime);
         })();
     </script>
 
-    <!-- BINARY 0s and 1s STREAM ENGINE -->
+    <!-- BINARY RAIN STREAM SCRIPT -->
     <script>
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
@@ -587,7 +568,7 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        const chars = '01'; // Stream exclusively binary 0s and 1s
+        const chars = '01';
         const fontSize = 14;
         let columns = Math.floor(canvas.width / fontSize);
         let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));

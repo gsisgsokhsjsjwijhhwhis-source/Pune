@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     
-    <!-- Fonts -->
+    <!-- Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -17,12 +17,11 @@
     <style>
         :root {
             --bg-base: #070709;
-            --glass-surface: rgba(16, 17, 22, 0.88);
-            --border-subtle: rgba(255, 255, 255, 0.08);
+            --glass-surface: rgba(16, 17, 22, 0.90);
+            --border-subtle: rgba(255, 255, 255, 0.10);
             --matrix-green: #00ff66;
-            --matrix-glow: rgba(0, 255, 102, 0.15);
             --text-main: #f5f5f7;
-            --text-muted: rgba(255, 255, 255, 0.55);
+            --text-muted: rgba(255, 255, 255, 0.60);
         }
 
         * {
@@ -32,7 +31,7 @@
 
         body {
             margin: 0;
-            background-color: var(--bg-base);
+            background-color: var(--bg-base) !important;
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
@@ -42,7 +41,7 @@
             overflow-x: hidden;
         }
 
-        /* 1. BINARY DIGITAL STREAM CANVAS (UP TO DOWN) */
+        /* DIGITAL STREAM CANVAS */
         #binaryCanvas {
             position: fixed;
             top: 0;
@@ -51,16 +50,16 @@
             height: 100vh;
             z-index: 1;
             pointer-events: none;
-            opacity: 0.55;
+            opacity: 0.40;
         }
 
-        /* 2. MINIMAL CURTAIN PRELOADER */
+        /* CURTAIN PRELOADER */
         #loader-overlay {
             position: fixed;
             inset: 0;
             width: 100vw;
             height: 100vh;
-            background: radial-gradient(circle at center, #15161c 0%, #070709 85%);
+            background: radial-gradient(circle at center, #17181f 0%, #070709 85%);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -91,11 +90,11 @@
         }
 
         .loader-track {
-            width: 190px;
+            width: 200px;
             height: 2px;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 999px;
-            margin-top: 20px;
+            margin-top: 18px;
             overflow: hidden;
         }
 
@@ -117,29 +116,15 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* 3. AMBIENT GLOW */
-        .ambient-glow {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, var(--matrix-glow) 0%, rgba(0, 0, 0, 0) 70%);
-            filter: blur(80px);
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        /* 4. FROSTED GLASS LOGIN CARD */
+        /* GATEWAY CARD */
         .admin-card {
-            background: var(--glass-surface);
+            background: var(--glass-surface) !important;
             border: 1px solid var(--border-subtle);
             border-radius: 20px;
             padding: 38px;
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(0, 255, 102, 0.04);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
             position: relative;
             z-index: 5;
         }
@@ -151,7 +136,7 @@
             padding: 4px 12px;
             border-radius: 999px;
             background: rgba(0, 255, 102, 0.1);
-            border: 1px solid rgba(0, 255, 102, 0.3);
+            border: 1px solid rgba(0, 255, 102, 0.35);
             color: var(--matrix-green);
             font-size: 0.72rem;
             font-weight: 700;
@@ -159,30 +144,6 @@
             text-transform: uppercase;
             font-family: 'JetBrains Mono', monospace;
             margin-bottom: 16px;
-        }
-
-        .gateway-title {
-            font-size: 1.65rem;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            color: #ffffff;
-            margin-bottom: 4px;
-        }
-
-        .gateway-sub {
-            color: var(--text-muted);
-            font-size: 0.88rem;
-            margin-bottom: 26px;
-        }
-
-        .tech-label {
-            font-size: 0.74rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            font-family: 'JetBrains Mono', monospace;
         }
 
         .admin-input {
@@ -193,7 +154,7 @@
             padding: 13px 16px !important;
             font-size: 0.95rem;
             font-family: 'JetBrains Mono', monospace;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .admin-input:focus {
@@ -218,7 +179,6 @@
             background-color: var(--matrix-green);
             color: #000000;
             transform: translateY(-1px);
-            box-shadow: 0 8px 24px rgba(0, 255, 102, 0.4);
         }
 
         .btn-subtle {
@@ -244,7 +204,7 @@
 </head>
 <body>
 
-    <!-- DIGITAL BINARY RAIN CANVAS (0s & 1s) -->
+    <!-- BINARY CANVAS -->
     <canvas id="binaryCanvas"></canvas>
 
     <!-- PRELOADER -->
@@ -254,12 +214,9 @@
             <div class="loader-track">
                 <div id="loader-fill"></div>
             </div>
-            <div class="loader-tag">ROOT // SECURITY_CHECK</div>
+            <div class="loader-tag">ROOT // SECURITY_GATE</div>
         </div>
     </div>
-
-    <!-- AMBIENT GLOW -->
-    <div class="ambient-glow"></div>
 
     <div class="container py-4" style="position: relative; z-index: 5;">
         <div class="row justify-content-center">
@@ -277,24 +234,27 @@
                     {% endif %}
                 {% endwith %}
 
-                <!-- LOGIN BOX -->
                 <div class="admin-card">
                     <div class="text-center mb-3">
                         <div class="cyber-badge">
                             <i class="bi bi-shield-lock-fill"></i> PRIVILEGED GATE
                         </div>
-                        <h1 class="gateway-title">Root Access</h1>
-                        <p class="gateway-sub">Authorize master session to orchestrate registry nodes</p>
+                        <h1 class="fw-bold text-white mb-1" style="font-size: 1.65rem; letter-spacing: -0.5px;">Root Access</h1>
+                        <p class="text-secondary small mb-4">Authenticate administrative operator session</p>
                     </div>
 
-                    <form method="POST" action="/admin/login">
+                    <form method="POST" action="/admin/login" autocomplete="off">
                         <div class="mb-3">
-                            <label class="tech-label">&gt; OPERATOR_IDENTIFIER</label>
-                            <input type="text" name="admin_username" class="form-control admin-input" placeholder="root / admin" required autofocus>
+                            <label class="form-label small text-secondary fw-bold" style="font-family: 'JetBrains Mono', monospace;">
+                                &gt; OPERATOR_IDENTIFIER
+                            </label>
+                            <input type="text" name="admin_username" class="form-control admin-input" placeholder="Enter username" required autofocus maxlength="64">
                         </div>
                         <div class="mb-4">
-                            <label class="tech-label">&gt; MASTER_SECURITY_KEY</label>
-                            <input type="password" name="admin_password" class="form-control admin-input" placeholder="••••••••••••" required>
+                            <label class="form-label small text-secondary fw-bold" style="font-family: 'JetBrains Mono', monospace;">
+                                &gt; MASTER_SECURITY_KEY
+                            </label>
+                            <input type="password" name="admin_password" class="form-control admin-input" placeholder="••••••••••••" required maxlength="128">
                         </div>
                         <button type="submit" class="btn btn-enter w-100 mb-2">
                             <i class="bi bi-unlock-fill me-1"></i> AUTH_AND_ENTER
@@ -309,7 +269,7 @@
         </div>
     </div>
 
-    <!-- PRELOADER JS -->
+    <!-- PRELOADER SCRIPT -->
     <script>
         (function () {
             const numEl = document.getElementById("loader-num");
@@ -319,7 +279,7 @@
             if (!numEl || !fillEl || !overlay) return;
 
             let current = 0;
-            const duration = 1100;
+            const duration = 1000;
             const stepTime = duration / 100;
 
             const interval = setInterval(() => {
@@ -331,13 +291,13 @@
                     clearInterval(interval);
                     setTimeout(() => {
                         overlay.classList.add("slide-away");
-                    }, 140);
+                    }, 120);
                 }
             }, stepTime);
         })();
     </script>
 
-    <!-- BINARY 0s and 1s STREAM ENGINE -->
+    <!-- BINARY RAIN STREAM SCRIPT -->
     <script>
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
@@ -349,7 +309,7 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        const chars = '01'; // Stream exclusively binary 0s and 1s
+        const chars = '01';
         const fontSize = 14;
         let columns = Math.floor(canvas.width / fontSize);
         let drops = Array(columns).fill(1).map(() => Math.floor(Math.random() * -50));
@@ -368,7 +328,7 @@
                 if (Math.random() > 0.94) {
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
                 } else {
-                    ctx.fillStyle = 'rgba(0, 255, 102, 0.38)';
+                    ctx.fillStyle = 'rgba(0, 255, 102, 0.35)';
                 }
 
                 ctx.fillText(char, x, y);
