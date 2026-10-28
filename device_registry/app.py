@@ -90,16 +90,10 @@ class Device(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 def migrate_bundled_sqlite_if_needed():
-    """One-time copy of the bundled SQLite snapshot into an empty PostgreSQL database."""
+    """One-time merge of bundled SQLite records into PostgreSQL without overwriting rows."""
     if not app.config['SQLALCHEMY_DATABASE_URI'].startswith(('postgresql://', 'postgresql+psycopg2://')):
         return
     if not os.path.isfile(local_db_path):
-        return
-
-    # Never merge a snapshot into a populated destination; that risks overwriting or
-    # mixing records. The migration is deliberately all-or-nothing for an empty DB.
-    if AdminSetting.query.count() or User.query.count() or Device.query.count():
-        app.logger.info("PostgreSQL already contains records; skipping bundled SQLite import.")
         return
 
     import sqlite3
@@ -112,25 +106,88 @@ def migrate_bundled_sqlite_if_needed():
     finally:
         source.close()
 
-    db.session.add_all([AdminSetting(**row) for row in admin_rows])
-    db.session.add_all([
-        User(**{**row, 'is_profile_completed': bool(row['is_profile_completed'])})
-        for row in user_rows
-    ])
-    db.session.add_all([Device(**row) for row in device_rows])
+    imported_admins = imported_users = imported_devices = 0
+    skipped_admins = skipped_users = skipped_devices = 0
+
+    # Never replace an existing administrator/password with a snapshot copy.
+    if not AdminSetting.query.first():
+        for row in admin_rows:
+            if db.session.get(AdminSetting, row['id']) is None:
+                db.session.add(AdminSetting(**row))
+                imported_admins += 1
+            else:
+                skipped_admins += 1
+    else:
+        skipped_admins = len(admin_rows)
+
+    # Match existing users by ID first, then by unique email/Google ID, so their
+    # devices can be associated with the correct live account without overwrites.
+    user_id_map = {}
+    for row in user_rows:
+        existing = db.session.get(User, row['id'])
+        if existing is None:
+            existing = User.query.filter_by(email=row['email']).first()
+        if existing is None and row['google_id']:
+            existing = User.query.filter_by(google_id=row['google_id']).first()
+
+        if existing is not None:
+            if existing.email.lower() == row['email'].lower():
+                user_id_map[row['id']] = existing.id
+            skipped_users += 1
+            continue
+
+        user = User(
+            id=row['id'],
+            google_id=row['google_id'],
+            full_name=row['full_name'],
+            email=row['email'],
+            phone=row['phone'],
+            is_profile_completed=bool(row['is_profile_completed'])
+        )
+        db.session.add(user)
+        user_id_map[row['id']] = row['id']
+        imported_users += 1
+
     db.session.flush()
 
-    # Preserve explicit SQLite IDs and advance PostgreSQL sequences beyond them.
+    for row in device_rows:
+        existing = db.session.get(Device, row['id'])
+        if existing is None:
+            existing = Device.query.filter_by(imei=row['imei']).first()
+        mapped_user_id = user_id_map.get(row['user_id'])
+        if existing is not None:
+            skipped_devices += 1
+            continue
+        if mapped_user_id is None or db.session.get(User, mapped_user_id) is None:
+            skipped_devices += 1
+            continue
+
+        device = Device(
+            id=row['id'],
+            imei=row['imei'],
+            brand=row['brand'],
+            model=row['model'],
+            status=row['status'],
+            user_id=mapped_user_id
+        )
+        db.session.add(device)
+        imported_devices += 1
+
+    db.session.flush()
+    # Explicit imported IDs must not leave PostgreSQL sequences behind the data.
     for table_name in ('admin_setting', 'user', 'device'):
+        quoted_table = '"user"' if table_name == 'user' else table_name
         db.session.execute(text(
             "SELECT setval(pg_get_serial_sequence(:table_name, 'id'), "
-            "GREATEST(COALESCE((SELECT MAX(id) FROM " + table_name + "), 1), 1), "
-            "EXISTS(SELECT 1 FROM " + table_name + "))"
+            "GREATEST(COALESCE((SELECT MAX(id) FROM " + quoted_table + "), 1), 1), "
+            "EXISTS(SELECT 1 FROM " + quoted_table + "))"
         ), {'table_name': table_name})
     db.session.commit()
     app.logger.info(
-        "Imported bundled SQLite snapshot into PostgreSQL: %s admins, %s users, %s devices.",
-        len(admin_rows), len(user_rows), len(device_rows)
+        "SQLite-to-PostgreSQL import complete. Imported admins/users/devices: %s/%s/%s; "
+        "skipped due to existing/conflicting records: %s/%s/%s.",
+        imported_admins, imported_users, imported_devices,
+        skipped_admins, skipped_users, skipped_devices
     )
 
 
