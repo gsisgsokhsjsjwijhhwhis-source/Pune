@@ -18,8 +18,19 @@ is_production = bool(os.environ.get('RENDER'))
 
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
 
-# Database URI sanitization for Render PostgreSQL
-raw_db_url = os.environ.get('DATABASE_URL', 'sqlite:///registry.db')
+# Prefer the bundled local SQLite database when explicitly requested or present.
+# This lets the deployment use the existing local records instead of the currently
+# misconfigured remote PostgreSQL connection. Set USE_LOCAL_DATABASE=false only
+# after a valid remote DATABASE_URL is configured and the data has been migrated.
+local_db_path = os.path.join(app.instance_path, 'registry.db')
+use_local_database = os.environ.get('USE_LOCAL_DATABASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+if use_local_database or os.path.isfile(local_db_path):
+    os.makedirs(app.instance_path, exist_ok=True)
+    raw_db_url = 'sqlite:///registry.db'
+    app.logger.info("Using bundled local SQLite database at %s", local_db_path)
+else:
+    raw_db_url = os.environ.get('DATABASE_URL', 'sqlite:///registry.db')
+
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
