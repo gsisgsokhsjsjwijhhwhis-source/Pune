@@ -4,25 +4,31 @@ Flask application for registering devices and checking device status.
 
 ## Production database
 
-The Render deployment must use the PostgreSQL connection string stored as the Render service's `DATABASE_URL` environment variable. Production SQLite fallback is disabled. The application creates missing tables and, on its first successful connection to an empty PostgreSQL database, imports the existing records from `instance/registry.db` once. It logs the number of admin, user, and device records imported. If PostgreSQL already contains data, it will not merge or overwrite the bundled snapshot.
+All production reads and writes must use the server-side PostgreSQL database configured in Render's `DATABASE_URL`. The application rejects SQLite as a production database and does not import or fall back to a database file from the repository.
 
-After verifying that the migration completed and the counts match, remove `instance/registry.db` from the repository. Do not remove it before the migration is verified.
+The current app uses Supabase PostgreSQL. Keep the connection URL in Render environment variables only. For the shared session pooler, copy the exact connection details from Supabase Dashboard → **Connect** → **Session pooler**; the pooler hostname must not be guessed from the region.
+
+If the existing Render `DATABASE_URL` has correct credentials but the wrong pooler hostname, set `SUPABASE_POOLER_HOST` in Render to the exact hostname shown by Supabase Connect. The app will override only the hostname and preserve the password already in `DATABASE_URL`. `SUPABASE_DB_PORT` defaults to `5432`. Never put the password or full connection URL in this repository or logs.
+
+## Data reconciliation
+
+The old repository SQLite snapshot was checked against the server database. Its three user emails already match server accounts; the snapshot contains changed profile details, so live server values were not overwritten. The differences are preserved in the restricted Supabase table `public.registry_import_archive`.
+
+The three device rows in the snapshot have invalid IMEI lengths (7, 9, and 14 digits rather than 15). They are retained in that restricted archive for review and were not inserted into the active device registry. The previous admin username is retained for audit, but its old password hash is deliberately not copied over the existing server admin credential.
+
+The archive table has row-level security enabled and no public read/write policies. The live application tables remain the source of truth for new records.
 
 ## Render configuration
-
-Start command:
-
-`gunicorn device_registry.app:app`
 
 Build command:
 
 `pip install -r requirements.txt`
 
-Set a stable random `SECRET_KEY` in Render. The database connection string belongs only in Render's secret environment variables; never commit it to GitHub. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database needs its first admin account. Existing admin credentials are preserved by the one-time import.
+Start command:
 
-## Persistence and privacy
+`gunicorn device_registry.app:app`
 
-PostgreSQL is the live source of truth; the application must not use a deployed SQLite file for live writes. Keep database credentials private. The SQLite snapshot contains personal/device records and password hashes; if the repository was public, assume historical copies may exist and rotate exposed credentials.
+Set a stable random `SECRET_KEY` in Render. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database has no admin row; the existing server admin is preserved.
 
 ## Local development
 
@@ -30,4 +36,4 @@ Install dependencies with `pip install -r requirements.txt`, then run:
 
 `python -m device_registry.app`
 
-For local development only, the app uses `instance/registry.db` if it exists, or creates `registry.db`.
+Outside Render, the app uses a local SQLite database `registry.db` for development only. Database files and the `instance/` directory are ignored by Git and must never be committed.
