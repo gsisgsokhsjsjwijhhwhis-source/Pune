@@ -2,11 +2,15 @@
 
 Flask application for registering devices and checking device status.
 
-## Current deployment data source
+## Production database
 
-The repository includes the existing `instance/registry.db` SQLite database. When that file is present, the app uses it in preference to `DATABASE_URL`, so the Render service can use the local records while the Supabase pooler configuration is repaired.
+The Render deployment must use the PostgreSQL connection string stored as the Render service's `DATABASE_URL` environment variable. Production SQLite fallback is disabled. The application creates missing tables and, on its first successful connection to an empty PostgreSQL database, imports the existing records from `instance/registry.db` once. It logs the number of admin, user, and device records imported. If PostgreSQL already contains data, it will not merge or overwrite the bundled snapshot.
 
-The current Render start command is:
+After verifying that the migration completed and the counts match, remove `instance/registry.db` from the repository. Do not remove it before the migration is verified.
+
+## Render configuration
+
+Start command:
 
 `gunicorn device_registry.app:app`
 
@@ -14,21 +18,11 @@ Build command:
 
 `pip install -r requirements.txt`
 
-Set a stable, random `SECRET_KEY` in Render. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database needs its first admin account. Existing admin credentials in the local database are preserved.
+Set a stable random `SECRET_KEY` in Render. The database connection string belongs only in Render's secret environment variables; never commit it to GitHub. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database needs its first admin account. Existing admin credentials are preserved by the one-time import.
 
-## Important persistence and privacy caveats
+## Persistence and privacy
 
-SQLite is local-file storage. On Render, changes made to this database may be lost on redeploy/restart unless the service has a persistent disk mounted at the database location. The bundled database is a snapshot, not a live shared database. If people add/update devices after deployment, use a persistent disk or migrate the data to PostgreSQL before relying on those updates.
-
-The SQLite file may contain personal/device records and password hashes. Keep the repository private if the data is sensitive. If this repository has been public, assume the file and its earlier Git history may have been copied; consider rotating credentials and removing sensitive records/history.
-
-## Restoring the Supabase connection later
-
-The old connection failed with:
-
-`FATAL: (ENOTFOUND) tenant/user postgres.<project-ref> not found`
-
-To move back to PostgreSQL, first verify the project is active and copy the exact URI from Supabase Dashboard → **Connect**. Migrate the local data into that database and verify it before disabling local mode/removing the bundled database. Do not point the app at a blank database or assume a password change alone will fix a tenant/username mismatch.
+PostgreSQL is the live source of truth; the application must not use a deployed SQLite file for live writes. Keep database credentials private. The SQLite snapshot contains personal/device records and password hashes; if the repository was public, assume historical copies may exist and rotate exposed credentials.
 
 ## Local development
 
@@ -36,4 +30,4 @@ Install dependencies with `pip install -r requirements.txt`, then run:
 
 `python -m device_registry.app`
 
-The app uses `instance/registry.db` when present.
+For local development only, the app uses `instance/registry.db` if it exists, or creates `registry.db`.
