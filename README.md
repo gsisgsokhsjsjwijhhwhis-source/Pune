@@ -2,9 +2,11 @@
 
 Flask application for registering devices and checking device status.
 
-## Deploying on Render
+## Current deployment data source
 
-The current Render service starts with:
+The repository includes the existing `instance/registry.db` SQLite database. When that file is present, the app uses it in preference to `DATABASE_URL`, so the Render service can use the local records while the Supabase pooler configuration is repaired.
+
+The current Render start command is:
 
 `gunicorn device_registry.app:app`
 
@@ -12,34 +14,26 @@ Build command:
 
 `pip install -r requirements.txt`
 
-Set these environment variables in the Render service:
+Set a stable, random `SECRET_KEY` in Render. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database needs its first admin account. Existing admin credentials in the local database are preserved.
 
-- `DATABASE_URL`: PostgreSQL connection URI for the existing production database.
-- `SECRET_KEY`: a long, random, stable secret used to sign sessions.
-- `INITIAL_ADMIN_USER` and `INITIAL_ADMIN_PASSWORD`: strong initial admin credentials. The initial password is used only when the configured database has no admin row.
-- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: optional; needed for Google sign-in.
+## Important persistence and privacy caveats
 
-Do not commit `.env`, database files, credentials, or Python bytecode. Render's free web-service filesystem is ephemeral, so local SQLite is not a suitable production store for user/device records.
+SQLite is local-file storage. On Render, changes made to this database may be lost on redeploy/restart unless the service has a persistent disk mounted at the database location. The bundled database is a snapshot, not a live shared database. If people add/update devices after deployment, use a persistent disk or migrate the data to PostgreSQL before relying on those updates.
 
-## Fixing the current database connection error
+The SQLite file may contain personal/device records and password hashes. Keep the repository private if the data is sensitive. If this repository has been public, assume the file and its earlier Git history may have been copied; consider rotating credentials and removing sensitive records/history.
 
-The observed Render log reports:
+## Restoring the Supabase connection later
+
+The old connection failed with:
 
 `FATAL: (ENOTFOUND) tenant/user postgres.<project-ref> not found`
 
-This means the Supabase shared pooler cannot map the connection's host and username to a project. It is usually a pooler **host or username** mismatch, not simply a wrong password.
-
-1. Open the correct project in the Supabase Dashboard and choose **Connect**.
-2. Copy a complete PostgreSQL URI from the dashboard (Session pooler is a suitable starting point for this app).
-3. Replace only the password placeholder, URL-encoding special characters in the password if required. Keep the exact host, port, database, and username the dashboard supplied.
-4. In Render → this service → Environment, replace `DATABASE_URL` with that URI, save, and review the new deploy logs.
-
-Do not guess a pooler hostname such as `aws-0-...`, substitute a different project reference, switch to SQLite, or create a blank database as a workaround. Those changes can keep the service unavailable or detach it from existing user/device data. If the exact dashboard-provided URI still produces this error, the Supabase project/pooler mapping may require a Supabase support fix.
+To move back to PostgreSQL, first verify the project is active and copy the exact URI from Supabase Dashboard → **Connect**. Migrate the local data into that database and verify it before disabling local mode/removing the bundled database. Do not point the app at a blank database or assume a password change alone will fix a tenant/username mismatch.
 
 ## Local development
 
-Create a virtual environment, install `requirements.txt`, and run:
+Install dependencies with `pip install -r requirements.txt`, then run:
 
 `python -m device_registry.app`
 
-For local development, set `DATABASE_URL=sqlite:///registry.db` only if you intend to use a local development database. Never use this as a production data-store replacement.
+The app uses `instance/registry.db` when present.
