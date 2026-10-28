@@ -18,19 +18,39 @@ is_production = bool(os.environ.get('RENDER'))
 
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
 
-# Production must use a remote database. SQLite is permitted only for local development.
-repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-local_db_path = os.path.join(repo_root, 'instance', 'registry.db')
+# Production data must live in the server-side PostgreSQL database.
+# SQLite is allowed only for local development, never as a production fallback.
 raw_db_url = os.environ.get('DATABASE_URL', '').strip()
 if not raw_db_url:
     if is_production:
-        raise RuntimeError("DATABASE_URL must be configured in Render; local SQLite is disabled in production.")
-    raw_db_url = 'sqlite:///' + local_db_path if os.path.isfile(local_db_path) else 'sqlite:///registry.db'
-else:
-    app.logger.info("Using DATABASE_URL as the application's persistent database.")
+        raise RuntimeError("DATABASE_URL must be configured in Render; production SQLite is disabled.")
+    raw_db_url = 'sqlite:///registry.db'
 
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+
+# When correcting a Supabase shared-pooler endpoint, this optional override lets
+# Render change only the hostname while retaining the password already stored
+# in DATABASE_URL. Copy the hostname from Supabase Dashboard > Connect; never
+# guess it from the region. We do not log the URL or its credentials.
+pooler_host_override = os.environ.get('SUPABASE_POOLER_HOST', '').strip()
+if pooler_host_override:
+    from sqlalchemy.engine import make_url
+    parsed_db_url = make_url(raw_db_url)
+    if parsed_db_url.get_backend_name() != 'postgresql':
+        raise RuntimeError("SUPABASE_POOLER_HOST requires a PostgreSQL DATABASE_URL.")
+    query_params = dict(parsed_db_url.query)
+    query_params.setdefault('sslmode', 'require')
+    override_port = int(os.environ.get('SUPABASE_DB_PORT', parsed_db_url.port or 5432))
+    raw_db_url = parsed_db_url.set(
+        host=pooler_host_override,
+        port=override_port,
+        query=query_params
+    ).render_as_string(hide_password=False)
+    app.logger.info("Applied configured Supabase pooler hostname override.")
+
+if is_production and not raw_db_url.startswith(('postgresql://', 'postgresql+psycopg2://')):
+    raise RuntimeError("Production DATABASE_URL must point to a server-side PostgreSQL database.")
 
 app.config.update(
     SESSION_COOKIE_SECURE=is_production,       # HTTPS only in production
@@ -38,7 +58,8 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',             # CSRF protection
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=45),
     SQLALCHEMY_DATABASE_URI=raw_db_url,
-    SQLALCHEMY_TRACK_MODIFICATIONS=False
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True, 'pool_recycle': 300}
 )
 
 # Enforce OAuth transport security in production
@@ -89,108 +110,6 @@ class Device(db.Model):
     status = db.Column(db.String(20), default='NOT_FOR_SALE', nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-def migrate_bundled_sqlite_if_needed():
-    """One-time merge of bundled SQLite records into PostgreSQL without overwriting rows."""
-    if not app.config['SQLALCHEMY_DATABASE_URI'].startswith(('postgresql://', 'postgresql+psycopg2://')):
-        return
-    if not os.path.isfile(local_db_path):
-        return
-
-    import sqlite3
-    source = sqlite3.connect(local_db_path)
-    source.row_factory = sqlite3.Row
-    try:
-        admin_rows = [dict(row) for row in source.execute("SELECT id, username, password_hash FROM admin_setting ORDER BY id")]
-        user_rows = [dict(row) for row in source.execute("SELECT id, google_id, full_name, email, phone, is_profile_completed FROM user ORDER BY id")]
-        device_rows = [dict(row) for row in source.execute("SELECT id, imei, brand, model, status, user_id FROM device ORDER BY id")]
-    finally:
-        source.close()
-
-    imported_admins = imported_users = imported_devices = 0
-    skipped_admins = skipped_users = skipped_devices = 0
-
-    # Never replace an existing administrator/password with a snapshot copy.
-    if not AdminSetting.query.first():
-        for row in admin_rows:
-            if db.session.get(AdminSetting, row['id']) is None:
-                db.session.add(AdminSetting(**row))
-                imported_admins += 1
-            else:
-                skipped_admins += 1
-    else:
-        skipped_admins = len(admin_rows)
-
-    # Match existing users by ID first, then by unique email/Google ID, so their
-    # devices can be associated with the correct live account without overwrites.
-    user_id_map = {}
-    for row in user_rows:
-        existing = db.session.get(User, row['id'])
-        if existing is None:
-            existing = User.query.filter_by(email=row['email']).first()
-        if existing is None and row['google_id']:
-            existing = User.query.filter_by(google_id=row['google_id']).first()
-
-        if existing is not None:
-            if existing.email.lower() == row['email'].lower():
-                user_id_map[row['id']] = existing.id
-            skipped_users += 1
-            continue
-
-        user = User(
-            id=row['id'],
-            google_id=row['google_id'],
-            full_name=row['full_name'],
-            email=row['email'],
-            phone=row['phone'],
-            is_profile_completed=bool(row['is_profile_completed'])
-        )
-        db.session.add(user)
-        user_id_map[row['id']] = row['id']
-        imported_users += 1
-
-    db.session.flush()
-
-    for row in device_rows:
-        existing = db.session.get(Device, row['id'])
-        if existing is None:
-            existing = Device.query.filter_by(imei=row['imei']).first()
-        mapped_user_id = user_id_map.get(row['user_id'])
-        if existing is not None:
-            skipped_devices += 1
-            continue
-        if mapped_user_id is None or db.session.get(User, mapped_user_id) is None:
-            skipped_devices += 1
-            continue
-
-        device = Device(
-            id=row['id'],
-            imei=row['imei'],
-            brand=row['brand'],
-            model=row['model'],
-            status=row['status'],
-            user_id=mapped_user_id
-        )
-        db.session.add(device)
-        imported_devices += 1
-
-    db.session.flush()
-    # Explicit imported IDs must not leave PostgreSQL sequences behind the data.
-    for table_name in ('admin_setting', 'user', 'device'):
-        quoted_table = '"user"' if table_name == 'user' else table_name
-        db.session.execute(text(
-            "SELECT setval(pg_get_serial_sequence(:table_name, 'id'), "
-            "GREATEST(COALESCE((SELECT MAX(id) FROM " + quoted_table + "), 1), 1), "
-            "EXISTS(SELECT 1 FROM " + quoted_table + "))"
-        ), {'table_name': table_name})
-    db.session.commit()
-    app.logger.info(
-        "SQLite-to-PostgreSQL import complete. Imported admins/users/devices: %s/%s/%s; "
-        "skipped due to existing/conflicting records: %s/%s/%s.",
-        imported_admins, imported_users, imported_devices,
-        skipped_admins, skipped_users, skipped_devices
-    )
-
-
 # Database initialization is retried after transient connection failures.
 # Do not make Gunicorn exit just because the database is temporarily unavailable.
 _DB_INITIALIZED = False
@@ -212,7 +131,6 @@ def initialize_database():
     try:
         with app.app_context():
             db.create_all()
-            migrate_bundled_sqlite_if_needed()
             admin_row = AdminSetting.query.first()
             if not admin_row:
                 initial_admin_pass = os.environ.get('INITIAL_ADMIN_PASSWORD')
