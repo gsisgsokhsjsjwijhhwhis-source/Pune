@@ -18,24 +18,16 @@ is_production = bool(os.environ.get('RENDER'))
 
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
 
-# Prefer the bundled repository-level SQLite database when it exists.
-# Flask's default instance_path for this module is device_registry/instance, while
-# the preserved data file is in the repository root's instance/ directory.
+# Production must use a remote database. SQLite is permitted only for local development.
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 local_db_path = os.path.join(repo_root, 'instance', 'registry.db')
-use_local_database = os.environ.get('USE_LOCAL_DATABASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
-if use_local_database or os.path.isfile(local_db_path):
-    if not os.path.isfile(local_db_path):
-        raise RuntimeError(
-            "USE_LOCAL_DATABASE is enabled but the preserved local database file "
-            f"was not found at {local_db_path}"
-        )
-    # Use an absolute SQLite URI so Flask-SQLAlchemy cannot resolve it against
-    # a different instance directory and silently create an empty database.
-    raw_db_url = 'sqlite:///' + local_db_path
-    app.logger.info("Using bundled local SQLite database at %s", local_db_path)
+raw_db_url = os.environ.get('DATABASE_URL', '').strip()
+if not raw_db_url:
+    if is_production:
+        raise RuntimeError("DATABASE_URL must be configured in Render; local SQLite is disabled in production.")
+    raw_db_url = 'sqlite:///' + local_db_path if os.path.isfile(local_db_path) else 'sqlite:///registry.db'
 else:
-    raw_db_url = os.environ.get('DATABASE_URL', 'sqlite:///registry.db')
+    app.logger.info("Using DATABASE_URL as the application's persistent database.")
 
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
@@ -97,6 +89,51 @@ class Device(db.Model):
     status = db.Column(db.String(20), default='NOT_FOR_SALE', nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+def migrate_bundled_sqlite_if_needed():
+    """One-time copy of the bundled SQLite snapshot into an empty PostgreSQL database."""
+    if not app.config['SQLALCHEMY_DATABASE_URI'].startswith(('postgresql://', 'postgresql+psycopg2://')):
+        return
+    if not os.path.isfile(local_db_path):
+        return
+
+    # Never merge a snapshot into a populated destination; that risks overwriting or
+    # mixing records. The migration is deliberately all-or-nothing for an empty DB.
+    if AdminSetting.query.count() or User.query.count() or Device.query.count():
+        app.logger.info("PostgreSQL already contains records; skipping bundled SQLite import.")
+        return
+
+    import sqlite3
+    source = sqlite3.connect(local_db_path)
+    source.row_factory = sqlite3.Row
+    try:
+        admin_rows = [dict(row) for row in source.execute("SELECT id, username, password_hash FROM admin_setting ORDER BY id")]
+        user_rows = [dict(row) for row in source.execute("SELECT id, google_id, full_name, email, phone, is_profile_completed FROM user ORDER BY id")]
+        device_rows = [dict(row) for row in source.execute("SELECT id, imei, brand, model, status, user_id FROM device ORDER BY id")]
+    finally:
+        source.close()
+
+    db.session.add_all([AdminSetting(**row) for row in admin_rows])
+    db.session.add_all([
+        User(**{**row, 'is_profile_completed': bool(row['is_profile_completed'])})
+        for row in user_rows
+    ])
+    db.session.add_all([Device(**row) for row in device_rows])
+    db.session.flush()
+
+    # Preserve explicit SQLite IDs and advance PostgreSQL sequences beyond them.
+    for table_name in ('admin_setting', 'user', 'device'):
+        db.session.execute(text(
+            "SELECT setval(pg_get_serial_sequence(:table_name, 'id'), "
+            "GREATEST(COALESCE((SELECT MAX(id) FROM " + table_name + "), 1), 1), "
+            "EXISTS(SELECT 1 FROM " + table_name + "))"
+        ), {'table_name': table_name})
+    db.session.commit()
+    app.logger.info(
+        "Imported bundled SQLite snapshot into PostgreSQL: %s admins, %s users, %s devices.",
+        len(admin_rows), len(user_rows), len(device_rows)
+    )
+
+
 # Database initialization is retried after transient connection failures.
 # Do not make Gunicorn exit just because the database is temporarily unavailable.
 _DB_INITIALIZED = False
@@ -118,6 +155,7 @@ def initialize_database():
     try:
         with app.app_context():
             db.create_all()
+            migrate_bundled_sqlite_if_needed()
             admin_row = AdminSetting.query.first()
             if not admin_row:
                 initial_admin_pass = os.environ.get('INITIAL_ADMIN_PASSWORD')
