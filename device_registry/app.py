@@ -4,6 +4,8 @@ import time
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from authlib.integrations.flask_client import OAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -78,18 +80,109 @@ class Device(db.Model):
     status = db.Column(db.String(20), default='NOT_FOR_SALE', nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-# Initialize database and default admin credentials securely
-with app.app_context():
-    db.create_all()
-    admin_row = AdminSetting.query.first()
-    if not admin_row:
-        initial_admin_pass = os.environ.get('INITIAL_ADMIN_PASSWORD', 'Admin@SafeDevice2026')
-        default_admin = AdminSetting(
-            username=os.environ.get('INITIAL_ADMIN_USER', 'admin').lower(),
-            password_hash=generate_password_hash(initial_admin_pass)
+# Database initialization is retried after transient connection failures.
+# Do not make Gunicorn exit just because the database is temporarily unavailable.
+_DB_INITIALIZED = False
+_DB_RETRY_AFTER = 0.0
+_DB_RETRY_SECONDS = 10
+
+
+def initialize_database():
+    """Initialize schema and seed an admin only when secure credentials are configured."""
+    global _DB_INITIALIZED, _DB_RETRY_AFTER
+
+    if _DB_INITIALIZED:
+        return True
+
+    now = time.time()
+    if now < _DB_RETRY_AFTER:
+        return False
+
+    try:
+        with app.app_context():
+            db.create_all()
+            admin_row = AdminSetting.query.first()
+            if not admin_row:
+                initial_admin_pass = os.environ.get('INITIAL_ADMIN_PASSWORD')
+                initial_admin_user = os.environ.get('INITIAL_ADMIN_USER', 'admin').strip().lower()
+                if initial_admin_pass:
+                    db.session.add(AdminSetting(
+                        username=initial_admin_user,
+                        password_hash=generate_password_hash(initial_admin_pass)
+                    ))
+                    db.session.commit()
+                else:
+                    # Never create a publicly-known default administrator password.
+                    app.logger.warning(
+                        "No admin account exists and INITIAL_ADMIN_PASSWORD is not set; "
+                        "skipping initial admin creation."
+                    )
+
+        _DB_INITIALIZED = True
+        _DB_RETRY_AFTER = 0.0
+        app.logger.info("Database schema initialization completed.")
+        return True
+    except SQLAlchemyError:
+        _DB_RETRY_AFTER = time.time() + _DB_RETRY_SECONDS
+        app.logger.exception(
+            "Database initialization failed. The app will serve a temporary 503 "
+            "and retry database initialization."
         )
-        db.session.add(default_admin)
-        db.session.commit()
+        return False
+
+
+# Attempt initialization at process startup, but let Gunicorn stay alive if the
+# database is unreachable. Requests will retry initialization after a short delay.
+initialize_database()
+
+
+@app.before_request
+def ensure_database_is_ready():
+    if request.endpoint == 'static':
+        return None
+    if initialize_database():
+        return None
+    return (
+        """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temporarily unavailable</title>
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#070709;color:#f5f5f7;font:16px system-ui,sans-serif}
+main{max-width:620px;margin:24px;padding:32px;border:1px solid #333;border-radius:16px;background:#111217}
+h1{margin-top:0}p{line-height:1.6;color:#c6c7cc}.small{font-size:13px;color:#92949e}
+</style></head><body><main>
+<h1>Service temporarily unavailable</h1>
+<p>The application is running, but its database connection could not be established. No data has been switched or reset.</p>
+<p>Please retry shortly. The service will automatically retry the database connection.</p>
+<p class="small">If this persists, the deployment administrator must verify the production DATABASE_URL using the database provider's connection settings.</p>
+</main></body></html>""",
+        503,
+        {"Retry-After": str(_DB_RETRY_SECONDS), "Cache-Control": "no-store"}
+    )
+
+
+@app.route('/healthz')
+def healthz():
+    """Dependency-aware readiness endpoint for deployment diagnostics."""
+    try:
+        db.session.execute(text("SELECT 1"))
+        return {"status": "ok"}, 200
+    except OperationalError:
+        db.session.rollback()
+        app.logger.exception("Database health check failed.")
+        return {"status": "database_unavailable"}, 503, {"Cache-Control": "no-store"}
+
+
+@app.errorhandler(OperationalError)
+def handle_database_operational_error(error):
+    db.session.rollback()
+    app.logger.error("Database operation failed; returning 503.", exc_info=True)
+    return (
+        "The database is temporarily unavailable. Please retry shortly.",
+        503,
+        {"Retry-After": str(_DB_RETRY_SECONDS), "Cache-Control": "no-store"}
+    )
+
 
 # ==========================================
 # 3. RATE LIMITING & INPUT SANITIZATION
