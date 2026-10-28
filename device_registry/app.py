@@ -18,15 +18,21 @@ is_production = bool(os.environ.get('RENDER'))
 
 app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
 
-# Prefer the bundled local SQLite database when explicitly requested or present.
-# This lets the deployment use the existing local records instead of the currently
-# misconfigured remote PostgreSQL connection. Set USE_LOCAL_DATABASE=false only
-# after a valid remote DATABASE_URL is configured and the data has been migrated.
-local_db_path = os.path.join(app.instance_path, 'registry.db')
+# Prefer the bundled repository-level SQLite database when it exists.
+# Flask's default instance_path for this module is device_registry/instance, while
+# the preserved data file is in the repository root's instance/ directory.
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+local_db_path = os.path.join(repo_root, 'instance', 'registry.db')
 use_local_database = os.environ.get('USE_LOCAL_DATABASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 if use_local_database or os.path.isfile(local_db_path):
-    os.makedirs(app.instance_path, exist_ok=True)
-    raw_db_url = 'sqlite:///registry.db'
+    if not os.path.isfile(local_db_path):
+        raise RuntimeError(
+            "USE_LOCAL_DATABASE is enabled but the preserved local database file "
+            f"was not found at {local_db_path}"
+        )
+    # Use an absolute SQLite URI so Flask-SQLAlchemy cannot resolve it against
+    # a different instance directory and silently create an empty database.
+    raw_db_url = 'sqlite:///' + local_db_path
     app.logger.info("Using bundled local SQLite database at %s", local_db_path)
 else:
     raw_db_url = os.environ.get('DATABASE_URL', 'sqlite:///registry.db')
