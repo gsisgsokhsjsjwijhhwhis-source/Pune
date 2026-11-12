@@ -491,7 +491,7 @@
                                     </select>
                                     <button type="submit" class="btn-action-white">Set</button>
                                 </form>
-                                <form method="POST" action="{{ url_for('delete_device', device_id=d.id) }}" class="mt-2" onsubmit="return confirm('Admin: delete the complaint for IMEI {{ d.imei }}? This cannot be undone.');">
+                                <form method="POST" action="{{ url_for('delete_device', device_id=d.id) }}" class="mt-2" data-confirm="Admin: delete the complaint for IMEI {{ d.imei }}? This cannot be undone.">
                                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-outline-danger btn-sm w-100">Delete complaint</button>
                                 </form>
@@ -538,7 +538,7 @@
     </div>
 
     <!-- PRELOADER SCRIPT -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         (function () {
             const numEl = document.getElementById("loader-num");
             const fillEl = document.getElementById("loader-fill");
@@ -566,7 +566,14 @@
     </script>
 
     <!-- BINARY RAIN STREAM SCRIPT -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+            if (form instanceof HTMLFormElement && form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+                event.preventDefault();
+            }
+        });
+
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
 
