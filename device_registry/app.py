@@ -464,7 +464,7 @@ def admin_login():
 
     if request.method == 'POST':
         username = sanitize_text(request.form.get('admin_username', '').strip().lower())
-        password = request.form.get('admin_password', '').strip()
+        password = request.form.get('admin_password', '')
 
         admin_data = AdminSetting.query.first()
         is_user_match = admin_data and (username == admin_data.username.lower())
@@ -516,7 +516,7 @@ def update_admin_credentials():
         abort(403)
 
     new_username = sanitize_text(request.form.get('new_username', '').strip().lower())
-    new_password = request.form.get('new_password', '').strip()
+    new_password = request.form.get('new_password', '')
 
     if not new_username or len(new_password) < 8:
         flash("Password must be at least 8 characters in length.", "danger")
@@ -551,7 +551,7 @@ def register_device():
         return redirect(url_for('home'))
 
     raw_imei = request.form.get('imei', '').strip()
-    imei = re.sub(r'[^0-9]', '', raw_imei)
+    imei = raw_imei
     brand = sanitize_text(request.form.get('brand', ''), 50)
     model = sanitize_text(request.form.get('model', ''), 50)
     status = request.form.get('status')
