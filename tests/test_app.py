@@ -266,7 +266,10 @@ class DeviceRegistryTests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
         self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
-        self.assertIn("Content-Security-Policy", response.headers)
+        policy = response.headers.get("Content-Security-Policy", "")
+        script_policy = next((part for part in policy.split(';') if part.strip().startswith('script-src ')), '')
+        self.assertNotIn("'unsafe-inline'", script_policy)
+        self.assertRegex(response.data, rb'<script nonce="[^"]+"')
 
     def test_delete_requires_csrf(self):
         self.sign_in_as(self.owner_id)
