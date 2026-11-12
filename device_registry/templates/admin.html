@@ -491,6 +491,10 @@
                                     </select>
                                     <button type="submit" class="btn-action-white">Set</button>
                                 </form>
+                                <form method="POST" action="{{ url_for('delete_device', device_id=d.id) }}" class="mt-2" onsubmit="return confirm('Admin: delete the complaint for IMEI {{ d.imei }}? This cannot be undone.');">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">Delete complaint</button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}
