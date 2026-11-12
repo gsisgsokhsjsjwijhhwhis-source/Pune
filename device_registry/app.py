@@ -606,6 +606,25 @@ def update_status(device_id):
     flash(f"Hardware status flag updated to '{new_status}'.", "info")
     return redirect(safe_return_url())
 
+@app.route('/delete-device/<int:device_id>', methods=['POST'])
+def delete_device(device_id):
+    """Delete one registered device only for its owner or an authenticated admin."""
+    current_user = get_current_user()
+    device = db.session.get(Device, device_id)
+    if not device:
+        abort(404)
+
+    is_admin = bool(session.get('admin_authenticated'))
+    if not is_admin and (not current_user or device.user_id != current_user.id):
+        abort(403)
+
+    deleted_imei = device.imei
+    db.session.delete(device)
+    db.session.commit()
+    app.logger.info("Device complaint deleted by %s; record id=%s", "admin" if is_admin else "owner", device_id)
+    flash(f"Registered complaint for IMEI {deleted_imei} was deleted.", "success")
+    return redirect(url_for('admin_panel') if is_admin else url_for('home'))
+
 # ==========================================
 # 7. SECURITY HEADERS
 # ==========================================
@@ -615,6 +634,15 @@ def apply_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
+    response.headers['Content-Security-Policy'] = (\
+        \"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; \"
+        \"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; \"
+        \"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; \"
+        \"font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; \"
+        \"img-src 'self' data:; connect-src 'self'; upgrade-insecure-requests\"
+    )
+    if is_production:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
 if __name__ == '__main__':
