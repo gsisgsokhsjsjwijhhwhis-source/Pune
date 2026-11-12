@@ -13,6 +13,7 @@ os.environ.pop("RENDER", None)
 from device_registry.app import (  # noqa: E402
     app,
     db,
+    AdminSetting,
     User,
     Device,
     is_valid_imei,
@@ -39,7 +40,8 @@ class DeviceRegistryTests(unittest.TestCase):
                 phone="+919876543210",
                 is_profile_completed=True,
             )
-            db.session.add_all([first, second])
+            admin = AdminSetting(username="admin", password_hash="unused-test-hash")
+            db.session.add_all([admin, first, second])
             db.session.commit()
             self.owner_id = first.id
             self.other_id = second.id
@@ -146,6 +148,86 @@ class DeviceRegistryTests(unittest.TestCase):
             headers={"Referer": "https://attacker.example/steal-session"},
         ):
             self.assertEqual(safe_return_url(), "/")
+
+
+    def test_user_can_see_and_delete_only_their_own_complaint(self):
+        self.sign_in_as(self.owner_id)
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"Delete complaint", page.data)
+        token = self.token(page)
+
+        with app.app_context():
+            extra = Device(
+                imei="356938035643809",
+                brand="Test",
+                model="Other Phone",
+                status="FOR_SALE",
+                user_id=self.other_id,
+            )
+            db.session.add(extra)
+            db.session.commit()
+            extra_id = extra.id
+
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+            self.assertIsNotNone(db.session.get(Device, extra_id))
+
+    def test_user_cannot_delete_another_users_complaint(self):
+        self.sign_in_as(self.other_id)
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 403)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
+
+    def test_admin_can_see_and_delete_one_selected_complaint(self):
+        with self.client.session_transaction() as session:
+            session["admin_authenticated"] = True
+
+        page = self.client.get("/admin")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"Delete complaint", page.data)
+        token = self.token(page)
+
+        with app.app_context():
+            extra = Device(
+                imei="356938035643809",
+                brand="Test",
+                model="Other Phone",
+                status="FOR_SALE",
+                user_id=self.other_id,
+            )
+            db.session.add(extra)
+            db.session.commit()
+            extra_id = extra.id
+
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/admin")
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+            self.assertIsNotNone(db.session.get(Device, extra_id))
+
+    def test_delete_complaint_requires_csrf(self):
+        self.sign_in_as(self.owner_id)
+        response = self.client.post(f"/delete-device/{self.device_id}")
+        self.assertEqual(response.status_code, 400)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
+
 
 
 if __name__ == "__main__":
