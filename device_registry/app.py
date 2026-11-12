@@ -5,7 +5,7 @@ import hmac
 import secrets
 from urllib.parse import urlsplit
 from datetime import timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, session, abort, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -88,6 +88,11 @@ limiter = Limiter(
     headers_enabled=True,
     default_limits=[]
 )
+if is_production and rate_limit_storage == 'memory://':
+    app.logger.warning(
+        "RATELIMIT_STORAGE_URI is using per-process memory storage. "
+        "Configure shared Redis/Valkey storage for consistent limits across workers."
+    )
 
 # Enforce OAuth transport security in production
 if is_production:
@@ -194,6 +199,12 @@ initialize_database()
 
 
 @app.before_request
+def set_csp_nonce():
+    """Create a fresh nonce for inline scripts on this response."""
+    g.csp_nonce = secrets.token_urlsafe(18)
+
+
+@app.before_request
 def ensure_database_is_ready():
     if request.endpoint == 'static':
         return None
@@ -222,7 +233,11 @@ h1{margin-top:0}p{line-height:1.6;color:#c6c7cc}.small{font-size:13px;color:#929
 def inject_csrf_token():
     def csrf_token():
         return session.setdefault('_csrf_token', secrets.token_urlsafe(32))
-    return {'csrf_token': csrf_token}
+
+    def csp_nonce():
+        return getattr(g, 'csp_nonce', '')
+
+    return {'csrf_token': csrf_token, 'csp_nonce': csp_nonce}
 
 
 @app.before_request
@@ -669,7 +684,7 @@ def apply_security_headers(response):
     response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        f"script-src 'self' 'nonce-{getattr(g, 'csp_nonce', '')}' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
         "img-src 'self' data:; connect-src 'self'; upgrade-insecure-requests"
