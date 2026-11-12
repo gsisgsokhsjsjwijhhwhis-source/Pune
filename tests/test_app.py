@@ -188,6 +188,12 @@ class DeviceRegistryTests(unittest.TestCase):
         with app.app_context():
             self.assertIsNone(db.session.get(Device, self.device_id))
 
+    def test_security_headers_are_present(self):
+        response = self.client.get("/")
+        self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertIn("Content-Security-Policy", response.headers)
+
     def test_delete_requires_csrf(self):
         self.sign_in_as(self.owner_id)
         response = self.client.post(f"/delete-device/{self.device_id}")
