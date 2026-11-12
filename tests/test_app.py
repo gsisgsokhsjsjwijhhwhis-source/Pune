@@ -150,3 +150,52 @@ class DeviceRegistryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_owner_can_delete_only_own_device(self):
+        self.sign_in_as(self.owner_id)
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+
+    def test_user_cannot_delete_another_users_device(self):
+        self.sign_in_as(self.other_id)
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 403)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
+
+    def test_admin_can_delete_any_device(self):
+        from device_registry.app import AdminSetting
+        with app.app_context():
+            db.session.add(AdminSetting(username="root", password_hash="not-used"))
+            db.session.commit()
+        with self.client.session_transaction() as session:
+            session["admin_authenticated"] = True
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+
+    def test_delete_requires_csrf(self):
+        self.sign_in_as(self.owner_id)
+        response = self.client.post(f"/delete-device/{self.device_id}")
+        self.assertEqual(response.status_code, 400)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
