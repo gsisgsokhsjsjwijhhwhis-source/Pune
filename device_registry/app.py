@@ -634,12 +634,12 @@ def apply_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
-    response.headers['Content-Security-Policy'] = (\
-        \"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; \"
-        \"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; \"
-        \"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; \"
-        \"font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; \"
-        \"img-src 'self' data:; connect-src 'self'; upgrade-insecure-requests\"
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
+        "img-src 'self' data:; connect-src 'self'; upgrade-insecure-requests"
     )
     if is_production:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
