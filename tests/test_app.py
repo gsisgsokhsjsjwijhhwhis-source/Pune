@@ -178,7 +178,8 @@ class DeviceRegistryTests(unittest.TestCase):
             db.session.commit()
         with self.client.session_transaction() as session:
             session["admin_authenticated"] = True
-        page = self.client.get("/")
+        page = self.client.get("/admin")
+        self.assertEqual(page.status_code, 200)
         token = self.token(page)
         response = self.client.post(
             f"/delete-device/{self.device_id}",
