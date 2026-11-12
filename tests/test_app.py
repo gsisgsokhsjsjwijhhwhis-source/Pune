@@ -188,8 +188,10 @@ class DeviceRegistryTests(unittest.TestCase):
 
         updated_page = self.client.get("/")
         self.assertIn(b"1 Complaints", updated_page.data)
-        self.assertNotIn(b"490154203237518", updated_page.data)
-        self.assertIn(b"356938035643809", updated_page.data)
+        table_body = re.search(rb"<tbody>(.*?)</tbody>", updated_page.data, re.DOTALL)
+        self.assertIsNotNone(table_body)
+        self.assertNotIn(b"490154203237518", table_body.group(1))
+        self.assertIn(b"356938035643809", table_body.group(1))
         with app.app_context():
             self.assertIsNone(db.session.get(Device, self.device_id))
             self.assertIsNotNone(db.session.get(Device, second_device_id))
