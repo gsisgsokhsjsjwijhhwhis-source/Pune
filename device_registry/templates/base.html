@@ -309,7 +309,7 @@
     </div>
 
     <!-- PRELOADER SCRIPT -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         (function () {
             const numEl = document.getElementById("loader-num");
             const fillEl = document.getElementById("loader-fill");
@@ -337,7 +337,14 @@
     </script>
 
     <!-- BINARY RAIN STREAM ENGINE -->
-    <script>
+    <script nonce="{{ csp_nonce() }}">
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+            if (form instanceof HTMLFormElement && form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+                event.preventDefault();
+            }
+        });
+
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
 
