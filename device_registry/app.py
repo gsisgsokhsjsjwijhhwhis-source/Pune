@@ -606,6 +606,25 @@ def update_status(device_id):
     flash(f"Hardware status flag updated to '{new_status}'.", "info")
     return redirect(safe_return_url())
 
+@app.route('/delete-device/<int:device_id>', methods=['POST'])
+def delete_device(device_id):
+    """Delete exactly one device complaint for its owner or an authenticated admin."""
+    current_user = get_current_user()
+    device = db.session.get(Device, device_id)
+    if not device:
+        abort(404)
+
+    is_admin = bool(session.get('admin_authenticated'))
+    if not is_admin and (not current_user or device.user_id != current_user.id):
+        abort(403)
+
+    deleted_imei = device.imei
+    db.session.delete(device)
+    db.session.commit()
+    flash(f"Registered complaint for IMEI {deleted_imei} was deleted.", "success")
+    return redirect(url_for('admin_panel') if is_admin else url_for('home'))
+
+
 # ==========================================
 # 7. SECURITY HEADERS
 # ==========================================
