@@ -159,6 +159,41 @@ class DeviceRegistryTests(unittest.TestCase):
         with app.app_context():
             self.assertIsNone(db.session.get(Device, self.device_id))
 
+    def test_deleting_selected_complaint_updates_count_and_keeps_other_device(self):
+        from device_registry.app import Device as RegistryDevice
+        with app.app_context():
+            second_device = RegistryDevice(
+                imei="356938035643809",
+                brand="Second",
+                model="Phone",
+                status="NOT_FOR_SALE",
+                user_id=self.owner_id,
+            )
+            db.session.add(second_device)
+            db.session.commit()
+            second_device_id = second_device.id
+
+        self.sign_in_as(self.owner_id)
+        page = self.client.get("/")
+        self.assertIn(b"2 Complaints", page.data)
+        self.assertIn(b"490154203237518", page.data)
+        self.assertIn(b"356938035643809", page.data)
+        token = self.token(page)
+
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        updated_page = self.client.get("/")
+        self.assertIn(b"1 Complaints", updated_page.data)
+        self.assertNotIn(b"490154203237518", updated_page.data)
+        self.assertIn(b"356938035643809", updated_page.data)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+            self.assertIsNotNone(db.session.get(Device, second_device_id))
+
     def test_user_cannot_delete_another_users_device(self):
         self.sign_in_as(self.other_id)
         page = self.client.get("/")
