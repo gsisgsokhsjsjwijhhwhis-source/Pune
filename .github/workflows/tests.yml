@@ -2,7 +2,7 @@ name: Python tests
 
 on:
   push:
-    branches: ["main", "fix/harden-device-registry", "feature/complaint-delete-security-audit"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
