@@ -19,7 +19,16 @@ app = Flask(__name__)
 # ==========================================
 is_production = bool(os.environ.get('RENDER'))
 
-app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
+configured_secret_key = os.environ.get('SECRET_KEY')
+if is_production and (
+    not configured_secret_key or len(configured_secret_key) < 32
+):
+    raise RuntimeError(
+        "A stable SECRET_KEY of at least 32 characters must be configured in Render."
+    )
+
+# Local development may generate an ephemeral key; production must use a stable secret.
+app.secret_key = configured_secret_key or secrets.token_hex(32)
 
 # Production data must live in the server-side PostgreSQL database.
 # SQLite is allowed only for local development, never as a production fallback.
@@ -62,6 +71,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=45),
     SQLALCHEMY_DATABASE_URI=raw_db_url,
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    MAX_CONTENT_LENGTH=16 * 1024,
     SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True, 'pool_recycle': 300}
 )
 
