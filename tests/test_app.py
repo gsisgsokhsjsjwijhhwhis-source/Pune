@@ -1,6 +1,8 @@
 """Regression tests for authentication and device-registry security."""
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -77,6 +79,21 @@ class DeviceRegistryTests(unittest.TestCase):
         self.assertFalse(is_valid_imei("490154203237519"))
         self.assertFalse(is_valid_imei("49015420323751"))
         self.assertFalse(is_valid_imei("49015420323751x"))
+
+    def test_production_requires_stable_secret_key(self):
+        env = os.environ.copy()
+        env["RENDER"] = "true"
+        env.pop("SECRET_KEY", None)
+        result = subprocess.run(
+            [sys.executable, "-c", "import device_registry.app"],
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SECRET_KEY", result.stderr)
 
     def test_health_endpoint_checks_database(self):
         response = self.client.get("/healthz")
