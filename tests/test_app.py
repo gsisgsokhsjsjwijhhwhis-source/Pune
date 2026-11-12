@@ -147,11 +147,6 @@ class DeviceRegistryTests(unittest.TestCase):
         ):
             self.assertEqual(safe_return_url(), "/")
 
-
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_owner_can_delete_only_own_device(self):
         self.sign_in_as(self.owner_id)
         page = self.client.get("/")
@@ -199,3 +194,7 @@ if __name__ == "__main__":
         self.assertEqual(response.status_code, 400)
         with app.app_context():
             self.assertIsNotNone(db.session.get(Device, self.device_id))
+
+
+if __name__ == "__main__":
+    unittest.main()
