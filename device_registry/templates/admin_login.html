@@ -244,6 +244,7 @@
                     </div>
 
                     <form method="POST" action="/admin/login" autocomplete="off">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label class="form-label small text-secondary fw-bold" style="font-family: 'JetBrains Mono', monospace;">
                                 &gt; OPERATOR_IDENTIFIER
