@@ -188,6 +188,13 @@ class DeviceRegistryTests(unittest.TestCase):
         with app.app_context():
             self.assertIsNone(db.session.get(Device, self.device_id))
 
+    def test_public_imei_lookup_does_not_expose_owner_contact_details(self):
+        response = self.client.get("/?search_imei=490154203237518")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"owner@example.test", response.data)
+        self.assertNotIn(b"+911234567890", response.data)
+        self.assertNotIn(b"Registry Owner", response.data)
+
     def test_security_headers_are_present(self):
         response = self.client.get("/")
         self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
