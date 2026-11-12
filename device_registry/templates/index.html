@@ -65,6 +65,7 @@
         <div class="frosted-card h-100">
             <h5 class="fw-bold text-white mb-4"><i class="bi bi-plus-circle text-success me-2"></i>Enroll Hardware</h5>
             <form method="POST" action="/register-device">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <label class="form-label small text-secondary fw-semibold">Manufacturer / Brand</label>
                     <input type="text" name="brand" class="form-control input-dark" placeholder="e.g. Apple, OnePlus" required>
@@ -122,6 +123,7 @@
                             </td>
                             <td>
                                 <form method="POST" action="/update-status/{{ dev.id }}" class="d-flex gap-2">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                     <select name="status" class="form-select form-select-sm input-dark py-1" style="min-width: 95px;">
                                         <option value="NOT_FOR_SALE" {% if dev.status == 'NOT_FOR_SALE' %}selected{% endif %}>Lock</option>
                                         <option value="FOR_SALE" {% if dev.status == 'FOR_SALE' %}selected{% endif %}>Sell</option>

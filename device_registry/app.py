@@ -1,11 +1,14 @@
 import os
 import re
 import time
+import hmac
+import secrets
+from urllib.parse import urlsplit
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from authlib.integrations.flask_client import OAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -191,6 +194,29 @@ h1{margin-top:0}p{line-height:1.6;color:#c6c7cc}.small{font-size:13px;color:#929
     )
 
 
+@app.context_processor
+def inject_csrf_token():
+    def csrf_token():
+        return session.setdefault('_csrf_token', secrets.token_urlsafe(32))
+    return {'csrf_token': csrf_token}
+
+
+@app.before_request
+def protect_state_changing_requests():
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return None
+
+    expected = session.get('_csrf_token')
+    submitted = request.form.get('_csrf_token') or request.headers.get('X-CSRF-Token')
+    if (
+        not isinstance(expected, str)
+        or not isinstance(submitted, str)
+        or not hmac.compare_digest(expected, submitted)
+    ):
+        abort(400, description="The form token is missing or expired. Refresh the page and try again.")
+    return None
+
+
 @app.route('/healthz')
 def healthz():
     """Dependency-aware readiness endpoint for deployment diagnostics."""
@@ -244,11 +270,43 @@ def get_current_user():
     uid = session.get('user_id')
     return db.session.get(User, uid) if uid else None
 
-def sanitize_text(text, max_len=100):
-    if not text:
+def sanitize_text(value, max_len=100):
+    """Normalize user text without corrupting legitimate punctuation.
+
+    Jinja auto-escapes template output; input validation is handled by each
+    endpoint rather than deleting characters such as apostrophes or ampersands.
+    """
+    if value is None:
         return ""
-    cleaned = re.sub(r'[<>&"\'/]', '', str(text).strip())
+    cleaned = "".join(char for char in str(value).strip() if char.isprintable())
     return cleaned[:max_len]
+
+
+def is_valid_imei(value):
+    """Return True only for a 15-digit IMEI with a valid Luhn check digit."""
+    if not isinstance(value, str) or not re.fullmatch(r"\d{15}", value):
+        return False
+
+    total = 0
+    for position, char in enumerate(reversed(value)):
+        digit = int(char)
+        if position % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        total += digit
+    return total % 10 == 0
+
+
+def safe_return_url():
+    """Accept only same-host referrers so redirects cannot be sent off-site."""
+    referrer = request.referrer
+    if not referrer:
+        return url_for("home")
+    parsed = urlsplit(referrer)
+    if parsed.scheme not in {"http", "https"} or parsed.netloc != request.host:
+        return url_for("home")
+    return referrer
 
 # ==========================================
 # 4. APPLICATION ROUTES
@@ -290,34 +348,53 @@ def google_callback():
         abort(400)
     try:
         token = google.authorize_access_token()
-        user_info = token.get('userinfo')
+        user_info = token.get('userinfo') or {}
         google_id = user_info.get('sub')
-        google_email = user_info.get('email')
-        google_name = user_info.get('name', 'Operator')
+        google_email = (user_info.get('email') or '').strip().lower()
+        google_name = user_info.get('name') or 'Operator'
 
-        user = User.query.filter((User.google_id == google_id) | (User.email == google_email)).first()
+        # Only link accounts using an email Google explicitly marks as verified.
+        if not google_id or not google_email or user_info.get('email_verified') is not True:
+            raise ValueError("Google did not return a verified identity.")
 
-        if not user:
+        google_user = User.query.filter_by(google_id=google_id).first()
+        email_user = User.query.filter(db.func.lower(User.email) == google_email).first()
+        if google_user and email_user and google_user.id != email_user.id:
+            raise ValueError("Google identity and email resolve to different accounts.")
+
+        user = google_user or email_user
+        if user and user.google_id and user.google_id != google_id:
+            raise ValueError("Email is already linked to another Google identity.")
+
+        if user:
+            # Attach the Google subject to a matching legacy email account once.
+            if not user.google_id:
+                user.google_id = google_id
+        else:
             user = User(
                 google_id=google_id,
-                full_name=sanitize_text(google_name),
-                email=google_email.lower().strip(),
+                full_name=sanitize_text(google_name, 100) or "Operator",
+                email=google_email,
                 phone="",
                 is_profile_completed=False
             )
             db.session.add(user)
-            db.session.commit()
-            session['user_id'] = user.id
-            flash("OAuth link established. Please submit an emergency contact number.", "info")
+
+        db.session.commit()
+        user_id = user.id
+        profile_completed = user.is_profile_completed
+        session.clear()  # Rotate the session contents after authentication.
+        session['user_id'] = user_id
+
+        if not profile_completed:
+            flash("Sign-in successful. Please complete your profile.", "info")
             return redirect(url_for('edit_profile'))
 
-        session['user_id'] = user.id
-        if not user.is_profile_completed:
-            return redirect(url_for('edit_profile'))
-
-        flash(f"Session established: {user.full_name}", "success")
-    except Exception as e:
-        flash("OAuth Authentication Failure. Please verify your provider settings.", "danger")
+        flash("Signed in successfully.", "success")
+    except Exception:
+        db.session.rollback()
+        app.logger.warning("Google sign-in failed; identity was not linked.")
+        flash("Google sign-in could not be completed. Please retry or contact support.", "danger")
 
     return redirect(url_for('home'))
 
@@ -329,19 +406,27 @@ def edit_profile():
         return redirect(url_for('home'))
 
     if request.method == 'POST':
-        new_name = sanitize_text(request.form.get('full_name', ''))
+        new_name = sanitize_text(request.form.get('full_name', ''), 100)
         new_email = request.form.get('email', '').strip().lower()
-        new_phone = re.sub(r'[^0-9+ -]', '', request.form.get('phone', '').strip())
+        new_phone = re.sub(r'[^0-9+]', '', request.form.get('phone', '').strip())
+        phone_digits = re.sub(r'\D', '', new_phone)
+
+        if not new_name:
+            flash("Display name is required.", "danger")
+            return render_template('profile.html', user=current_user)
 
         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', new_email):
             flash("Invalid email format.", "danger")
             return render_template('profile.html', user=current_user)
 
-        if len(re.sub(r'\D', '', new_phone)) < 10:
-            flash("Emergency contact phone number must be at least 10 digits.", "danger")
+        if len(phone_digits) < 10 or len(phone_digits) > 15 or new_phone.count('+') > 1 or ('+' in new_phone[1:]):
+            flash("Enter a valid emergency phone number with 10 to 15 digits.", "danger")
             return render_template('profile.html', user=current_user)
 
-        existing = User.query.filter(User.email == new_email, User.id != current_user.id).first()
+        existing = User.query.filter(
+            db.func.lower(User.email) == new_email,
+            User.id != current_user.id
+        ).first()
         if existing:
             flash("That email address is already registered to another account.", "danger")
             return render_template('profile.html', user=current_user)
@@ -350,9 +435,14 @@ def edit_profile():
         current_user.email = new_email
         current_user.phone = new_phone
         current_user.is_profile_completed = True
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("That email address is already registered to another account.", "danger")
+            return render_template('profile.html', user=current_user)
 
-        flash("Profile and emergency beacon telemetry updated successfully.", "success")
+        flash("Profile updated successfully.", "success")
         return redirect(url_for('home'))
 
     return render_template('profile.html', user=current_user)
@@ -365,7 +455,8 @@ def admin_login():
     if session.get('admin_authenticated'):
         return redirect(url_for('admin_panel'))
 
-    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+    # Do not trust a caller-supplied X-Forwarded-For value for authentication controls.
+    client_ip = request.remote_addr or "unknown"
     is_blocked, remaining_sec = is_ip_rate_limited(client_ip)
     if is_blocked:
         flash(f"SECURITY LOCKOUT: Too many attempts. Retry in {remaining_sec} seconds.", "danger")
@@ -373,7 +464,7 @@ def admin_login():
 
     if request.method == 'POST':
         username = sanitize_text(request.form.get('admin_username', '').strip().lower())
-        password = request.form.get('admin_password', '').strip()
+        password = request.form.get('admin_password', '')
 
         admin_data = AdminSetting.query.first()
         is_user_match = admin_data and (username == admin_data.username.lower())
@@ -381,9 +472,10 @@ def admin_login():
 
         if is_user_match and is_pass_match:
             reset_attempts(client_ip)
+            session.clear()
             session['admin_authenticated'] = True
             session.permanent = True
-            flash("Root terminal access authorized. Security level: High.", "success")
+            flash("Administrator sign-in successful.", "success")
             return redirect(url_for('admin_panel'))
         else:
             record_failed_attempt(client_ip)
@@ -391,9 +483,9 @@ def admin_login():
 
     return render_template('admin_login.html')
 
-@app.route('/admin/logout')
+@app.route('/admin/logout', methods=['POST'])
 def admin_logout():
-    session.pop('admin_authenticated', None)
+    session.clear()
     flash("Admin session terminated.", "info")
     return redirect(url_for('home'))
 
@@ -424,21 +516,25 @@ def update_admin_credentials():
         abort(403)
 
     new_username = sanitize_text(request.form.get('new_username', '').strip().lower())
-    new_password = request.form.get('new_password', '').strip()
+    new_password = request.form.get('new_password', '')
 
     if not new_username or len(new_password) < 8:
         flash("Password must be at least 8 characters in length.", "danger")
         return redirect(url_for('admin_panel'))
 
     admin_data = AdminSetting.query.first()
+    if not admin_data:
+        abort(409)
+
     admin_data.username = new_username
     admin_data.password_hash = generate_password_hash(new_password)
     db.session.commit()
 
-    flash(f"Root credentials updated. Active Operator: '{new_username}'.", "success")
-    return redirect(url_for('admin_panel'))
+    session.clear()
+    flash("Administrator credentials updated. Sign in again with the new credentials.", "success")
+    return redirect(url_for('admin_login'))
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
     flash("Session terminated securely.", "info")
@@ -455,13 +551,17 @@ def register_device():
         return redirect(url_for('home'))
 
     raw_imei = request.form.get('imei', '').strip()
-    imei = re.sub(r'[^0-9]', '', raw_imei)
-    brand = sanitize_text(request.form.get('brand', ''))
-    model = sanitize_text(request.form.get('model', ''))
+    imei = raw_imei
+    brand = sanitize_text(request.form.get('brand', ''), 50)
+    model = sanitize_text(request.form.get('model', ''), 50)
     status = request.form.get('status')
 
-    if len(imei) != 15:
-        flash("Invalid IMEI format: Must be exactly 15 numeric digits.", "danger")
+    if not is_valid_imei(imei):
+        flash("Invalid IMEI. Enter a valid 15-digit IMEI, including its check digit.", "danger")
+        return redirect(url_for('home'))
+
+    if not brand or not model:
+        flash("Manufacturer and model are required.", "danger")
         return redirect(url_for('home'))
 
     if status not in ['NOT_FOR_SALE', 'FOR_SALE', 'LOST_OR_STOLEN']:
@@ -474,7 +574,12 @@ def register_device():
 
     new_device = Device(imei=imei, brand=brand, model=model, status=status, user_id=current_user.id)
     db.session.add(new_device)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("A device with this IMEI is already registered in the system.", "danger")
+        return redirect(url_for('home'))
 
     flash(f"Hardware unit {brand} {model} registered securely under your account.", "success")
     return redirect(url_for('home'))
@@ -492,12 +597,14 @@ def update_status(device_id):
         return redirect(url_for('home'))
 
     new_status = request.form.get('status')
-    if new_status in ['NOT_FOR_SALE', 'FOR_SALE', 'LOST_OR_STOLEN']:
-        device.status = new_status
-        db.session.commit()
-        flash(f"Hardware status flag updated to '{new_status}'.", "info")
+    if new_status not in ['NOT_FOR_SALE', 'FOR_SALE', 'LOST_OR_STOLEN']:
+        flash("Invalid device status flag.", "danger")
+        return redirect(safe_return_url())
 
-    return redirect(request.referrer or url_for('home'))
+    device.status = new_status
+    db.session.commit()
+    flash(f"Hardware status flag updated to '{new_status}'.", "info")
+    return redirect(safe_return_url())
 
 # ==========================================
 # 7. SECURITY HEADERS
