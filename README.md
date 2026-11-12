@@ -28,7 +28,7 @@ Start command:
 
 `gunicorn device_registry.app:app`
 
-Set a stable random `SECRET_KEY` in Render. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database has no admin row; the existing server admin is preserved.
+Set a stable, randomly generated `SECRET_KEY` of at least 32 characters in Render. Production startup now fails closed if it is missing or too short; local development can still generate an ephemeral key. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as Render environment variables to enable Google sign-in. Set `INITIAL_ADMIN_USER` and a strong `INITIAL_ADMIN_PASSWORD` only if a new database has no admin row; the existing server admin is preserved. Never commit real values or copy them into support messages.
 
 ## Local development
 
