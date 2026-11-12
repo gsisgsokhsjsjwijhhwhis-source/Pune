@@ -80,6 +80,18 @@ class DeviceRegistryTests(unittest.TestCase):
         self.assertFalse(is_valid_imei("49015420323751"))
         self.assertFalse(is_valid_imei("49015420323751x"))
 
+    def test_google_login_is_rate_limited(self):
+        remote_ip = "203.0.113.17"
+        responses = [
+            self.client.get(
+                "/login/google",
+                environ_base={"REMOTE_ADDR": remote_ip},
+            )
+            for _ in range(11)
+        ]
+        self.assertTrue(all(response.status_code == 302 for response in responses[:10]))
+        self.assertEqual(responses[10].status_code, 429)
+
     def test_production_requires_stable_secret_key(self):
         env = os.environ.copy()
         env["RENDER"] = "true"
