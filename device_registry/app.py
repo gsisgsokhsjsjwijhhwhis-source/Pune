@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from authlib.integrations.flask_client import OAuth
@@ -73,6 +75,18 @@ app.config.update(
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     MAX_CONTENT_LENGTH=16 * 1024,
     SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True, 'pool_recycle': 300}
+)
+
+# Use shared Redis/Valkey storage in production when configured. The in-memory
+# fallback is useful for local development but is not shared between workers.
+rate_limit_storage = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://').strip() or 'memory://'
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=rate_limit_storage,
+    strategy='fixed-window',
+    headers_enabled=True,
+    default_limits=[]
 )
 
 # Enforce OAuth transport security in production
@@ -322,6 +336,7 @@ def safe_return_url():
 # 4. APPLICATION ROUTES
 # ==========================================
 @app.route('/')
+@limiter.limit('60 per minute')
 def home():
     current_user = get_current_user()
     if current_user and not current_user.is_profile_completed:
@@ -345,6 +360,7 @@ def home():
     )
 
 @app.route('/login/google')
+@limiter.limit('10 per minute')
 def google_login():
     if not google:
         flash("Google OAuth credentials are not configured on this server.", "warning")
@@ -353,6 +369,7 @@ def google_login():
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth/callback')
+@limiter.limit('20 per minute')
 def google_callback():
     if not google:
         abort(400)
@@ -409,6 +426,7 @@ def google_callback():
     return redirect(url_for('home'))
 
 @app.route('/profile', methods=['GET', 'POST'])
+@limiter.limit('10 per minute')
 def edit_profile():
     current_user = get_current_user()
     if not current_user:
@@ -461,6 +479,7 @@ def edit_profile():
 # 5. ADMIN AUTHENTICATION
 # ==========================================
 @app.route('/admin/login', methods=['GET', 'POST'])
+@limiter.limit('5 per 5 minutes')
 def admin_login():
     if session.get('admin_authenticated'):
         return redirect(url_for('admin_panel'))
@@ -521,6 +540,7 @@ def admin_panel():
     )
 
 @app.route('/admin/update-credentials', methods=['POST'])
+@limiter.limit('5 per 10 minutes')
 def update_admin_credentials():
     if not session.get('admin_authenticated'):
         abort(403)
@@ -554,6 +574,7 @@ def logout():
 # 6. HARDWARE ENROLLMENT & CONTROL
 # ==========================================
 @app.route('/register-device', methods=['POST'])
+@limiter.limit('10 per minute')
 def register_device():
     current_user = get_current_user()
     if not current_user:
@@ -595,6 +616,7 @@ def register_device():
     return redirect(url_for('home'))
 
 @app.route('/update-status/<int:device_id>', methods=['POST'])
+@limiter.limit('30 per minute')
 def update_status(device_id):
     current_user = get_current_user()
     device = db.session.get(Device, device_id)
@@ -617,6 +639,7 @@ def update_status(device_id):
     return redirect(safe_return_url())
 
 @app.route('/delete-device/<int:device_id>', methods=['POST'])
+@limiter.limit('10 per minute')
 def delete_device(device_id):
     """Delete one registered device only for its owner or an authenticated admin."""
     current_user = get_current_user()
