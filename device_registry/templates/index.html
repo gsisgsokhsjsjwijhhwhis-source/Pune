@@ -25,28 +25,19 @@
                     <div class="frosted-card p-4 border-warning border-opacity-25" style="background: rgba(245, 158, 11, 0.04) !important;">
                         <h5 class="fw-bold text-warning mb-2"><i class="bi bi-shield-lock-fill me-2"></i> Flag: Locked // Not For Sale</h5>
                         <p class="mb-2 text-white">Device <strong>{{ search_result.brand }} {{ search_result.model }}</strong> is active personal property and not authorized for transfer.</p>
-                        <div class="small text-secondary mono-cell mt-3 pt-3 border-top border-secondary border-opacity-25">
-                            <div><strong>OPERATOR:</strong> {{ search_result.owner.full_name }}</div>
-                            <div><strong>CONTACT:</strong> {{ search_result.owner.phone }}</div>
-                        </div>
+                        <p class="small text-secondary mt-3 pt-3 border-top border-secondary border-opacity-25 mb-0">Owner identity and contact details are kept private. If this is your device, sign in to manage your registry record.</p>
                     </div>
                 {% elif search_result.status == 'FOR_SALE' %}
                     <div class="frosted-card p-4 border-success border-opacity-25" style="background: rgba(0, 255, 102, 0.04) !important;">
                         <h5 class="fw-bold text-success mb-2"><i class="bi bi-shield-check me-2"></i> Flag: Authorized For Sale</h5>
-                        <p class="mb-2 text-white">Transfer authorized by registered operator <strong>{{ search_result.owner.full_name }}</strong> for <strong>{{ search_result.brand }} {{ search_result.model }}</strong>.</p>
-                        <div class="small text-secondary mono-cell mt-3 pt-3 border-top border-secondary border-opacity-25">
-                            <div><strong>VERIFICATION CHANNEL:</strong> {{ search_result.owner.phone }}</div>
-                        </div>
+                        <p class="mb-2 text-white">Transfer is marked as authorized by the registered operator for <strong>{{ search_result.brand }} {{ search_result.model }}</strong>.</p>
+                        <p class="small text-secondary mt-3 pt-3 border-top border-secondary border-opacity-25 mb-0">Owner identity and contact details are kept private.</p>
                     </div>
                 {% elif search_result.status == 'LOST_OR_STOLEN' %}
                     <div class="frosted-card p-4 border-danger border-opacity-25" style="background: rgba(255, 51, 75, 0.08) !important;">
                         <h5 class="fw-bold text-danger mb-2"><i class="bi bi-exclamation-octagon-fill me-2"></i> Critical: Reported Stolen / Lost</h5>
                         <p class="text-white fw-bold mb-2">Unauthorized hardware. Contact authorities or notify the owner immediately.</p>
-                        <div class="small text-white mono-cell mt-3 pt-3 border-top border-danger border-opacity-25">
-                            <div><strong>OWNER:</strong> {{ search_result.owner.full_name }}</div>
-                            <div><strong>EMERGENCY CONTACT:</strong> <span class="text-warning fw-bold">{{ search_result.owner.phone }}</span></div>
-                            <div><strong>EMAIL:</strong> {{ search_result.owner.email }}</div>
-                        </div>
+                        <div class="small text-white mt-3 pt-3 border-top border-danger border-opacity-25">Owner identity and contact details are private. Do not attempt to use or transfer this device; contact the appropriate authorities or mobile carrier.</div>
                     </div>
                 {% endif %}
             {% else %}
@@ -94,8 +85,8 @@
     <div class="col-lg-7">
         <div class="frosted-card h-100">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h5 class="fw-bold text-white mb-0"><i class="bi bi-phone text-info me-2"></i>Registered Hardware</h5>
-                <span class="badge border border-secondary text-secondary rounded-pill px-3">{{ devices|length }} Nodes</span>
+                <h5 class="fw-bold text-white mb-0"><i class="bi bi-phone text-info me-2"></i>My Registered Complaints</h5>
+                <span class="badge border border-secondary text-secondary rounded-pill px-3">{{ devices|length }} Complaints</span>
             </div>
             <div class="table-responsive">
                 <table class="table align-middle">
@@ -130,6 +121,10 @@
                                         <option value="LOST_OR_STOLEN" {% if dev.status == 'LOST_OR_STOLEN' %}selected{% endif %}>Stolen</option>
                                     </select>
                                     <button type="submit" class="btn btn-white btn-sm px-2">Set</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('delete_device', device_id=dev.id) }}" class="mt-2" data-confirm="Delete the complaint for IMEI {{ dev.imei }}? This cannot be undone.">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">Delete complaint</button>
                                 </form>
                             </td>
                         </tr>

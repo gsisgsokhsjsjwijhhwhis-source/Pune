@@ -1,6 +1,8 @@
 """Regression tests for authentication and device-registry security."""
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -78,6 +80,33 @@ class DeviceRegistryTests(unittest.TestCase):
         self.assertFalse(is_valid_imei("49015420323751"))
         self.assertFalse(is_valid_imei("49015420323751x"))
 
+    def test_google_login_is_rate_limited(self):
+        remote_ip = "203.0.113.17"
+        responses = [
+            self.client.get(
+                "/login/google",
+                environ_base={"REMOTE_ADDR": remote_ip},
+            )
+            for _ in range(11)
+        ]
+        self.assertTrue(all(response.status_code == 302 for response in responses[:10]))
+        self.assertEqual(responses[10].status_code, 429)
+
+    def test_production_requires_stable_secret_key(self):
+        env = os.environ.copy()
+        env["RENDER"] = "true"
+        env.pop("SECRET_KEY", None)
+        result = subprocess.run(
+            [sys.executable, "-c", "import device_registry.app"],
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SECRET_KEY", result.stderr)
+
     def test_health_endpoint_checks_database(self):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
@@ -146,6 +175,108 @@ class DeviceRegistryTests(unittest.TestCase):
             headers={"Referer": "https://attacker.example/steal-session"},
         ):
             self.assertEqual(safe_return_url(), "/")
+
+    def test_owner_can_delete_only_own_device(self):
+        self.sign_in_as(self.owner_id)
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+
+    def test_deleting_selected_complaint_updates_count_and_keeps_other_device(self):
+        from device_registry.app import Device as RegistryDevice
+        with app.app_context():
+            second_device = RegistryDevice(
+                imei="356938035643809",
+                brand="Second",
+                model="Phone",
+                status="NOT_FOR_SALE",
+                user_id=self.owner_id,
+            )
+            db.session.add(second_device)
+            db.session.commit()
+            second_device_id = second_device.id
+
+        self.sign_in_as(self.owner_id)
+        page = self.client.get("/")
+        self.assertIn(b"2 Complaints", page.data)
+        self.assertIn(b"490154203237518", page.data)
+        self.assertIn(b"356938035643809", page.data)
+        token = self.token(page)
+
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        updated_page = self.client.get("/")
+        self.assertIn(b"1 Complaints", updated_page.data)
+        table_body = re.search(rb"<tbody>(.*?)</tbody>", updated_page.data, re.DOTALL)
+        self.assertIsNotNone(table_body)
+        self.assertNotIn(b"490154203237518", table_body.group(1))
+        self.assertIn(b"356938035643809", table_body.group(1))
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+            self.assertIsNotNone(db.session.get(Device, second_device_id))
+
+    def test_user_cannot_delete_another_users_device(self):
+        self.sign_in_as(self.other_id)
+        page = self.client.get("/")
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 403)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
+
+    def test_admin_can_delete_any_device(self):
+        from device_registry.app import AdminSetting
+        with app.app_context():
+            db.session.add(AdminSetting(username="root", password_hash="not-used"))
+            db.session.commit()
+        with self.client.session_transaction() as session:
+            session["admin_authenticated"] = True
+        page = self.client.get("/admin")
+        self.assertEqual(page.status_code, 200)
+        token = self.token(page)
+        response = self.client.post(
+            f"/delete-device/{self.device_id}",
+            data={"_csrf_token": token},
+        )
+        self.assertEqual(response.status_code, 302)
+        with app.app_context():
+            self.assertIsNone(db.session.get(Device, self.device_id))
+
+    def test_public_imei_lookup_does_not_expose_owner_contact_details(self):
+        response = self.client.get("/?search_imei=490154203237518")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"owner@example.test", response.data)
+        self.assertNotIn(b"+911234567890", response.data)
+        self.assertNotIn(b"Registry Owner", response.data)
+
+    def test_security_headers_are_present(self):
+        response = self.client.get("/")
+        self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
+        policy = response.headers.get("Content-Security-Policy", "")
+        script_policy = next((part for part in policy.split(';') if part.strip().startswith('script-src ')), '')
+        self.assertNotIn("'unsafe-inline'", script_policy)
+        self.assertRegex(response.data, rb'<script nonce="[^"]+"')
+
+    def test_delete_requires_csrf(self):
+        self.sign_in_as(self.owner_id)
+        response = self.client.post(f"/delete-device/{self.device_id}")
+        self.assertEqual(response.status_code, 400)
+        with app.app_context():
+            self.assertIsNotNone(db.session.get(Device, self.device_id))
 
 
 if __name__ == "__main__":

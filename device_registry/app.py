@@ -5,8 +5,10 @@ import hmac
 import secrets
 from urllib.parse import urlsplit
 from datetime import timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, session, abort, g
 from flask_sqlalchemy import SQLAlchemy
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from authlib.integrations.flask_client import OAuth
@@ -19,7 +21,16 @@ app = Flask(__name__)
 # ==========================================
 is_production = bool(os.environ.get('RENDER'))
 
-app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
+configured_secret_key = os.environ.get('SECRET_KEY')
+if is_production and (
+    not configured_secret_key or len(configured_secret_key) < 32
+):
+    raise RuntimeError(
+        "A stable SECRET_KEY of at least 32 characters must be configured in Render."
+    )
+
+# Local development may generate an ephemeral key; production must use a stable secret.
+app.secret_key = configured_secret_key or secrets.token_hex(32)
 
 # Production data must live in the server-side PostgreSQL database.
 # SQLite is allowed only for local development, never as a production fallback.
@@ -62,8 +73,26 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=45),
     SQLALCHEMY_DATABASE_URI=raw_db_url,
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    MAX_CONTENT_LENGTH=16 * 1024,
     SQLALCHEMY_ENGINE_OPTIONS={'pool_pre_ping': True, 'pool_recycle': 300}
 )
+
+# Use shared Redis/Valkey storage in production when configured. The in-memory
+# fallback is useful for local development but is not shared between workers.
+rate_limit_storage = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://').strip() or 'memory://'
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=rate_limit_storage,
+    strategy='fixed-window',
+    headers_enabled=True,
+    default_limits=[]
+)
+if is_production and rate_limit_storage == 'memory://':
+    app.logger.warning(
+        "RATELIMIT_STORAGE_URI is using per-process memory storage. "
+        "Configure shared Redis/Valkey storage for consistent limits across workers."
+    )
 
 # Enforce OAuth transport security in production
 if is_production:
@@ -170,6 +199,12 @@ initialize_database()
 
 
 @app.before_request
+def set_csp_nonce():
+    """Create a fresh nonce for inline scripts on this response."""
+    g.csp_nonce = secrets.token_urlsafe(18)
+
+
+@app.before_request
 def ensure_database_is_ready():
     if request.endpoint == 'static':
         return None
@@ -198,7 +233,11 @@ h1{margin-top:0}p{line-height:1.6;color:#c6c7cc}.small{font-size:13px;color:#929
 def inject_csrf_token():
     def csrf_token():
         return session.setdefault('_csrf_token', secrets.token_urlsafe(32))
-    return {'csrf_token': csrf_token}
+
+    def csp_nonce():
+        return getattr(g, 'csp_nonce', '')
+
+    return {'csrf_token': csrf_token, 'csp_nonce': csp_nonce}
 
 
 @app.before_request
@@ -312,6 +351,7 @@ def safe_return_url():
 # 4. APPLICATION ROUTES
 # ==========================================
 @app.route('/')
+@limiter.limit('60 per minute')
 def home():
     current_user = get_current_user()
     if current_user and not current_user.is_profile_completed:
@@ -335,6 +375,7 @@ def home():
     )
 
 @app.route('/login/google')
+@limiter.limit('10 per minute')
 def google_login():
     if not google:
         flash("Google OAuth credentials are not configured on this server.", "warning")
@@ -343,6 +384,7 @@ def google_login():
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth/callback')
+@limiter.limit('20 per minute')
 def google_callback():
     if not google:
         abort(400)
@@ -399,6 +441,7 @@ def google_callback():
     return redirect(url_for('home'))
 
 @app.route('/profile', methods=['GET', 'POST'])
+@limiter.limit('10 per minute')
 def edit_profile():
     current_user = get_current_user()
     if not current_user:
@@ -451,6 +494,7 @@ def edit_profile():
 # 5. ADMIN AUTHENTICATION
 # ==========================================
 @app.route('/admin/login', methods=['GET', 'POST'])
+@limiter.limit('5 per 5 minutes')
 def admin_login():
     if session.get('admin_authenticated'):
         return redirect(url_for('admin_panel'))
@@ -511,6 +555,7 @@ def admin_panel():
     )
 
 @app.route('/admin/update-credentials', methods=['POST'])
+@limiter.limit('5 per 10 minutes')
 def update_admin_credentials():
     if not session.get('admin_authenticated'):
         abort(403)
@@ -544,6 +589,7 @@ def logout():
 # 6. HARDWARE ENROLLMENT & CONTROL
 # ==========================================
 @app.route('/register-device', methods=['POST'])
+@limiter.limit('10 per minute')
 def register_device():
     current_user = get_current_user()
     if not current_user:
@@ -585,6 +631,7 @@ def register_device():
     return redirect(url_for('home'))
 
 @app.route('/update-status/<int:device_id>', methods=['POST'])
+@limiter.limit('30 per minute')
 def update_status(device_id):
     current_user = get_current_user()
     device = db.session.get(Device, device_id)
@@ -606,6 +653,26 @@ def update_status(device_id):
     flash(f"Hardware status flag updated to '{new_status}'.", "info")
     return redirect(safe_return_url())
 
+@app.route('/delete-device/<int:device_id>', methods=['POST'])
+@limiter.limit('10 per minute')
+def delete_device(device_id):
+    """Delete one registered device only for its owner or an authenticated admin."""
+    current_user = get_current_user()
+    device = db.session.get(Device, device_id)
+    if not device:
+        abort(404)
+
+    is_admin = bool(session.get('admin_authenticated'))
+    if not is_admin and (not current_user or device.user_id != current_user.id):
+        abort(403)
+
+    deleted_imei = device.imei
+    db.session.delete(device)
+    db.session.commit()
+    app.logger.info("Device complaint deleted by %s; record id=%s", "admin" if is_admin else "owner", device_id)
+    flash(f"Registered complaint for IMEI {deleted_imei} was deleted.", "success")
+    return redirect(url_for('admin_panel') if is_admin else url_for('home'))
+
 # ==========================================
 # 7. SECURITY HEADERS
 # ==========================================
@@ -615,6 +682,15 @@ def apply_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; "
+        f"script-src 'self' 'nonce-{getattr(g, 'csp_nonce', '')}' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
+        "img-src 'self' data:; connect-src 'self'; upgrade-insecure-requests"
+    )
+    if is_production:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
 if __name__ == '__main__':

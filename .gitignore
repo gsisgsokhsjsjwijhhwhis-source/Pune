@@ -1,13 +1,20 @@
-# Sensitive credentials & keys (DO NOT PUSH TO GITHUB)
+# Secret configuration files (keep real values out of Git)
 config.py
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
 
-# Database file
+# Local database files
 *.db
 instance/
 
-# Python cache & virtual environment
+# Python cache & virtual environments
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
