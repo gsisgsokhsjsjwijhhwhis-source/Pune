@@ -14,6 +14,7 @@
             </p>
 
             <form method="POST" action="/profile">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <label class="form-label small text-info fw-bold mono-cell">&gt; DISPLAY_ALIAS</label>
                     <input type="text" name="full_name" class="form-control input-dark" value="{{ user.full_name }}" required>
